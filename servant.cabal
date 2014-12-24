@@ -39,6 +39,7 @@ library
     Servant.API.Sub
     Servant.Common.Text
     Servant.QQ
+    Servant.CanonicalType
     Servant.Utils.Links
   build-depends:
       base >=4.7 && <5
@@ -62,6 +63,7 @@ test-suite spec
     , hspec == 2.*
     , QuickCheck
     , parsec
+    , reflection == 1.5.*
     , servant
     , string-conversions
     , text

@@ -13,6 +13,8 @@ import Test.Hspec
 
 import Servant.API
 
+import Servant.TestUtils
+
 --------------------------------------------------------------------------
 -- Types for testing
 --------------------------------------------------------------------------
@@ -154,24 +156,3 @@ spec = do
             (u::WithBlockComments2) ~= (u::WithBlockComments2') ~> True
 
 
---------------------------------------------------------------------------
--- Utilities
---------------------------------------------------------------------------
-data HTrue
-data HFalse
-
--- Kiselyov's Type Equality predicate
-class  TypeEq x y b | x y -> b where { areEq :: x -> y -> Bool }
-instance               TypeEq x x HTrue where { areEq _ _ = True }
-instance b ~ HFalse => TypeEq x y b where     { areEq _ _ = False}
-
-infix 4 ~=
-(~=) :: TypeEq x y b => x -> y -> Bool
-(~=) = areEq
-
-u :: a
-u = undefined
-
-infix 3 ~>
-(~>) :: (Show a, Eq a) => a -> a -> Expectation
-(~>) = shouldBe
