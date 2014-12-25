@@ -20,6 +20,7 @@
 -- The behavior of the transformed server, however, should not change.
 module Servant.CanonicalType where
 
+import Prelude hiding (splitAt)
 import Data.Proxy
 import Servant.API
 import GHC.TypeLits
@@ -36,8 +37,9 @@ class Canonicalize orig new | orig -> new where
 instance ( AddNil start withNil
          , QSort withNil sortedWithNil
          , RemoveNil sortedWithNil sorted
-         ) => Canonicalize start sorted where
-    canonicalize = removeNil . qsort . addNil
+         , MakeBinTree sorted end
+         ) => Canonicalize start end where
+    canonicalize = makeBinTree . removeNil . qsort . addNil
 --------------------------------------------------------------------------
 -- Binary Tree combinator
 --
@@ -46,51 +48,65 @@ instance ( AddNil start withNil
 data BinTree node tree1 tree2 = BinTree node tree1 tree2
 
 -- Take a sorted API and make a binary tree for it
-class MakeBinTree sorted tree | sorted -> tree
+class MakeBinTree sorted tree | sorted -> tree where
+    makeBinTree :: sorted -> tree
 
-instance ( half ~ (RoundHalf (GetLength xs) 0)
-         , FindIndex half xs mid
-         , le ~ TakeN xs half
-         , ge ~ DropN xs (half + 1)
-         ) => MakeBinTree xs (BinTree mid le ge)
+instance ( half ~ (RoundHalf (GetLength orig))
+         , SplitAt orig (Proxy half) le mid ge
+         ) => MakeBinTree orig (BinTree mid le ge) where
+    makeBinTree sorted = splitAt sorted (Proxy :: Proxy half)
 
 
+class SplitAt orig n le mid ge | orig n -> le, orig n -> mid, orig n -> ge where
+    splitAt :: orig -> n -> BinTree mid le ge
+
+instance (SplitAtH horig torig n le mid ge
+         ) => SplitAt (horig :<|> torig) n le mid ge where
+    splitAt (h :<|> t) n = splitAtH h t n
+
+class SplitAtH accum rest n le mid ge | accum rest n -> le
+                                     , accum rest n -> mid
+                                     , accum rest n -> ge where
+    splitAtH :: accum -> rest -> n -> BinTree mid le ge
+
+
+instance SplitAtH accum (head :<|> rest) (Proxy 1) accum head rest where
+    splitAtH accum (h :<|> r) _ = BinTree h accum r
+
+instance ( SplitAtH (accum :<|> head) rest (Proxy (n - 1)) le mid ge
+         ) => SplitAtH accum (head :<|> rest) (Proxy n) le mid ge where
+    splitAtH accum (h :<|> r) _ = splitAtH (accum :<|> h) r (Proxy::Proxy (n - 1))
 
 type family GetLength api :: Nat where
     GetLength (head :<|> rest) = (GetLength (rest)) + 1
-    GetLength last             = 1
+    GetLength last             = 0
 
-data Head
-
-
-type family DropHead api where
-    DropHead (Head :<|> x) = x
-
-type family TakeN api (n :: Nat) where
-    TakeN api n = DropHead (TakeN' api n Head)
+data Head = Head
 
 
--- TODO: Check that this is correct, associativity-wise
-type family TakeN' api (n :: Nat) accum where
-    TakeN' x 0 accum = accum
-    TakeN' (head :<|> rest) n accum = TakeN' rest (n - 1) (accum :<|> rest)
+{-type family DropHead api where-}
+    {-DropHead (Head :<|> x) = x-}
 
-type family DropN api (n :: Nat) where
-    DropN rest 0 = rest
-    DropN (head :<|> rest) n = DropN rest (n - 1)
+{-type family TakeN api (n :: Nat) where-}
+    {-TakeN api n = DropHead (TakeN' api n Head)-}
 
-type family RoundHalf (n :: Nat) (counter :: Nat) :: Nat where
-    RoundHalf n counter = RoundHalf' n counter First
+{--- TODO: Check that this is correct, associativity-wise-}
+{-type family TakeN' api (n :: Nat) accum where-}
+    {-TakeN' x 0 accum = accum-}
+    {-TakeN' (head :<|> rest) n accum = TakeN' rest (n - 1) (accum :<|> rest)-}
+
+{-type family DropN api (n :: Nat) where-}
+    {-DropN rest 0 = rest-}
+    {-DropN (head :<|> rest) n = DropN rest (n - 1)-}
+
+type family RoundHalf (n :: Nat) :: Nat where
+    RoundHalf n = RoundHalf' n 0 First
 
 data Turn = First | Second
 type family RoundHalf' (n :: Nat) (counter :: Nat) (turn :: Turn ) where
     RoundHalf' n n turn = n
     RoundHalf' n counter First = RoundHalf' (n - 1) counter Second
-    RoundHalf' n counter Second = RoundHalf' n (counter + 1) Second
-
-type family Ifte (cond :: Bool) c1 c2 where
-    Ifte True c1 c2 = c1
-    Ifte False c1 c2 = c2
+    RoundHalf' n counter Second = RoundHalf' n (counter + 1) First
 
 class FindIndex length api val | length api -> val
 instance FindIndex 0 (head :<|> rest) head
