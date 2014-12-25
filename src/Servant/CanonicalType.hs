@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
@@ -32,13 +33,69 @@ import GHC.TypeLits
 class Canonicalize orig new | orig -> new where
     canonicalize :: orig -> new
 
-{-instance (Canonicalize a b) => Canonicalize (Proxy a) (Proxy b) where-}
-    {-canonicalize _ = Proxy-}
 instance ( AddNil start withNil
          , QSort withNil sortedWithNil
-         , RemoveNil sortedWithNil end
-         ) => Canonicalize start end where
+         , RemoveNil sortedWithNil sorted
+         ) => Canonicalize start sorted where
     canonicalize = removeNil . qsort . addNil
+--------------------------------------------------------------------------
+-- Binary Tree combinator
+--
+--------------------------------------------------------------------------
+
+data BinTree node tree1 tree2 = BinTree node tree1 tree2
+
+-- Take a sorted API and make a binary tree for it
+class MakeBinTree sorted tree | sorted -> tree
+
+instance ( half ~ (RoundHalf (GetLength xs) 0)
+         , FindIndex half xs mid
+         , le ~ TakeN xs half
+         , ge ~ DropN xs (half + 1)
+         ) => MakeBinTree xs (BinTree mid le ge)
+
+
+
+type family GetLength api :: Nat where
+    GetLength (head :<|> rest) = (GetLength (rest)) + 1
+    GetLength last             = 1
+
+data Head
+
+
+type family DropHead api where
+    DropHead (Head :<|> x) = x
+
+type family TakeN api (n :: Nat) where
+    TakeN api n = DropHead (TakeN' api n Head)
+
+
+-- TODO: Check that this is correct, associativity-wise
+type family TakeN' api (n :: Nat) accum where
+    TakeN' x 0 accum = accum
+    TakeN' (head :<|> rest) n accum = TakeN' rest (n - 1) (accum :<|> rest)
+
+type family DropN api (n :: Nat) where
+    DropN rest 0 = rest
+    DropN (head :<|> rest) n = DropN rest (n - 1)
+
+type family RoundHalf (n :: Nat) (counter :: Nat) :: Nat where
+    RoundHalf n counter = RoundHalf' n counter First
+
+data Turn = First | Second
+type family RoundHalf' (n :: Nat) (counter :: Nat) (turn :: Turn ) where
+    RoundHalf' n n turn = n
+    RoundHalf' n counter First = RoundHalf' (n - 1) counter Second
+    RoundHalf' n counter Second = RoundHalf' n (counter + 1) Second
+
+type family Ifte (cond :: Bool) c1 c2 where
+    Ifte True c1 c2 = c1
+    Ifte False c1 c2 = c2
+
+class FindIndex length api val | length api -> val
+instance FindIndex 0 (head :<|> rest) head
+instance (FindIndex (n - 1) rest val) => FindIndex n (head :<|> rest) val
+
 --------------------------------------------------------------------------
 -- Add or remove Nil
 --
@@ -163,22 +220,53 @@ instance ( Split x xs ls eqs gs
             ls' = qsort ls
             gs' = qsort gs
 
+
 --------------------------------------------------------------------------
--- Type families for testing
+-- Common Initial
 --------------------------------------------------------------------------
-type family CommonInitial x where
-    CommonInitial (a :> b :<|> a :> c) = a :> (CommonInitial b :<|> c)
-    CommonInitial a = a
 
-type family Sort x where
-    Sort (a :> b :<|> a :> d) = a :> (Sort (a :<|> d))
-    Sort (a :> b :<|> c :> d) = Sort' (CmpSymbol a c) (a :> b) (c :> d)
-    Sort (a :<|> b) = a :<|> b
+{-type family CommonInitial x where-}
+    {-CommonInitial (a :> b :<|> a :> c :<|> rest) = CommonInitial ((a :> (CommonInitial b :<|> c)) :<|> rest)-}
+    {-CommonInitial (a :<|> b :<|> rest) = a :<|> CommonInitial (b :<|> rest)-}
+    {-CommonInitial a = a-}
 
-type family Sort' (o::Ordering) a b where
-    Sort' LT a b = a :<|> b
-    Sort' EQ a b = a :<|> b
-    Sort' GT a b = b :<|> a
+{-class CommonInitial' orig flag new | orig flag -> new where-}
+    {-commonInitial' :: orig -> flag -> new-}
 
+{-class CommonInitialHelper head snd new flag-}
+        {-| head snd -> new-}
+        {-, head snd -> flag where-}
+    {-commonInitialHelper :: head -> snd -> new-}
+
+{-class CommonInitialHelper' snd tail flag-}
+        {-| snd tail -> new-}
+        {-, snd tail -> flag-}
+
+{-data Single'-}
+{-data Double'-}
+
+{-instance ( CommonInitialHelper head tail' new Single'-}
+         {-, CommonInitial' tail tail'-}
+         {-) => CommonInitial' (head :<|> snd :<|> tail) Single' new where-}
+    {-commonInitial' (head :<|> snd :<|> tail) = commonInitial' ((commonInitialHelper head snd) :<|> tail)-}
+
+{-instance ( CommonInitialHelper head tail' new Double'-}
+         {-, CommonInitial' tail tail'-}
+         {-) => CommonInitial' (head :<|> snd :<|> tail) Double' new where-}
+    {-commonInitial' (head :<|> snd :<|> tail) = head :<|> (commonInitial' $ snd :<|> tail)-}
+
+----
+
+{-instance CommonInitial (last :<|> Nil) (last :<|> Nil) where-}
+    {-commonInitial = id-}
+
+{-instance ( CommonInitial (b :<|> c) t-}
+         {-) => CommonInitial (a :> b :<|> a :> c) (a :> t) where-}
+    {-commonInitial (a :> b :<|> _ :> c) = a :> commonInitial (b :<|> c)-}
+
+{-instance ( CommonInitial b t-}
+         {-, CommonInitial (a :<|> t) t'-}
+         {-) => CommonInitial (a :<|> b) t' where-}
+    {-commonInitial (a :<|> b) = commonInitial (a :<|>-}
 
 
