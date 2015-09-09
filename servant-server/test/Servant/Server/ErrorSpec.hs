@@ -94,7 +94,7 @@ type ErrorRetryApi
      = "a" :> ReqBody '[JSON] Int      :> Post '[JSON] Int                -- 0
   :<|> "a" :> ReqBody '[PlainText] Int :> Post '[JSON] Int                -- 1
   :<|> "a" :> ReqBody '[JSON] Int      :> Post '[PlainText] Int           -- 2
-  :<|> "a" :> ReqBody '[JSON] String   :> Post '[PlainText] Int           -- 3
+  :<|> "a" :> ReqBody '[JSON] String   :> Post '[JSON] Int                -- 3
   :<|> "a" :> ReqBody '[JSON] Int      :> Get  '[PlainText] Int           -- 4
   :<|>        ReqBody '[JSON] Int      :> Get  '[JSON] Int                -- 5
   :<|>        ReqBody '[JSON] Int      :> Get  '[JSON] Int                -- 6
@@ -134,7 +134,7 @@ errorRetry = describe "Handler search"
      `shouldRespondWith` 415
 
   it "should not continue when body can't be deserialized" $ do
-    request methodPost "a" [jsonCT, jsonAccept] (BC.pack "nonsense")
+    request methodPost "a" [jsonCT, jsonAccept] (encode ("nonsense" :: String))
      `shouldRespondWith` 400
 
   it "should not continue when Accepts don't match" $ do
