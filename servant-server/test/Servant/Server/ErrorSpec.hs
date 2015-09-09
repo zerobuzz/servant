@@ -7,6 +7,7 @@ module Servant.Server.ErrorSpec (spec) where
 
 import           Data.Aeson                 (encode)
 import qualified Data.ByteString.Lazy.Char8 as BC
+import           Control.Monad.Trans.Either (left)
 import           Data.Proxy
 import           Network.HTTP.Types         (methodGet, methodPost)
 import           Test.Hspec
@@ -45,7 +46,7 @@ errorOrderApi :: Proxy ErrorOrderApi
 errorOrderApi = Proxy
 
 errorOrderServer :: Server ErrorOrderApi
-errorOrderServer = \_ _ -> return 10
+errorOrderServer = \_ _ -> left err402
 
 errorOrder :: Spec
 errorOrder = describe "HTTP error order"
@@ -80,6 +81,10 @@ errorOrder = describe "HTTP error order"
   it "has 406 as its fifth highest priority error" $ do
     request goodMethod goodUrl [goodContentType, badAccept] goodBody
       `shouldRespondWith` 406
+
+  it "returns handler errors as its lower priority errors" $ do
+    request goodMethod goodUrl [goodContentType, goodAccept] goodBody
+      `shouldRespondWith` 402
 
 -- }}}
 ------------------------------------------------------------------------------
@@ -123,6 +128,18 @@ errorRetry = describe "Handler search"
   it "should continue when methods don't match" $ do
     request methodGet "a" [jsonCT, jsonAccept] jsonBody
      `shouldRespondWith` 200 { matchBody = Just $ encode (4 :: Int) }
+
+  it "should not continue when Content-Types don't match" $ do
+    request methodPost "a" [plainCT, jsonAccept] jsonBody
+     `shouldRespondWith` 415
+
+  it "should not continue when body can't be deserialized" $ do
+    request methodPost "a" [jsonCT, jsonAccept] (BC.pack "nonsense")
+     `shouldRespondWith` 400
+
+  it "should not continue when Accepts don't match" $ do
+    request methodPost "a" [jsonCT, plainAccept] jsonBody
+     `shouldRespondWith` 406
 
 -- }}}
 ------------------------------------------------------------------------------
