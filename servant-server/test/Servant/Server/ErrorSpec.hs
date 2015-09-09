@@ -1,13 +1,14 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeOperators     #-}
-{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeOperators         #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Servant.Server.ErrorSpec (spec) where
 
-import           Data.Aeson         (encode)
-import qualified Data.ByteString.Lazy.Char8            as BC
+import           Data.Aeson                 (encode)
+import qualified Data.ByteString.Lazy.Char8 as BC
 import           Data.Proxy
-import           Network.HTTP.Types (methodGet, methodPost)
+import           Network.HTTP.Types         (methodGet, methodPost)
 import           Test.Hspec
 import           Test.Hspec.Wai
 
@@ -28,7 +29,7 @@ import           Servant
 -- 9) Call the handler. Whatever it returns, we return.
 
 spec :: Spec
-spec = do
+spec = describe "HTTP Errors" $ do
     errorOrder
     errorRetry
 
