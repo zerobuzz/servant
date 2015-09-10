@@ -121,7 +121,7 @@ instance (KnownSymbol capture, FromHttpApiData a, HasServer sublayout)
     DynamicRouter $ \ first ->
       route (Proxy :: Proxy sublayout)
             (case captured captureProxy first of
-               Nothing  -> return $ failWith NotFound
+               Nothing  -> return $ failWith err404
                Just v   -> feedTo subserver v)
     where captureProxy = Proxy :: Proxy (Capture capture a)
 
@@ -136,7 +136,7 @@ processMethodRouter :: forall a. ConvertibleStrings a B.ByteString
                     -> Maybe [(HeaderName, B.ByteString)]
                     -> Request -> RouteResult Response
 processMethodRouter handleA status method headers request = case handleA of
-  Nothing -> failWith UnsupportedMediaType
+  Nothing -> failWith err415
   Just (contentT, body) -> succeedWith $ responseLBS status hdrs bdy
     where
       bdy = if allowedMethodHead method request then "" else body
@@ -155,8 +155,8 @@ methodRouter method proxy status action = LeafRouter route'
                 handleA = handleAcceptH proxy (AcceptHeader accH) output
             processMethodRouter handleA status method Nothing request
       | pathIsEmpty request && requestMethod request /= method =
-          respond $ failWith WrongMethod
-      | otherwise = respond $ failWith NotFound
+          respond $ failWith err405
+      | otherwise = respond $ failWith err404
 
 methodRouterHeaders :: (GetHeaders (Headers h v), AllCTRender ctypes v)
                     => Method -> Proxy ctypes -> Status
@@ -172,8 +172,8 @@ methodRouterHeaders method proxy status action = LeafRouter route'
               handleA = handleAcceptH proxy (AcceptHeader accH) (getResponse output)
           processMethodRouter handleA status method (Just headers) request
       | pathIsEmpty request && requestMethod request /= method =
-          respond $ failWith WrongMethod
-      | otherwise = respond $ failWith NotFound
+          respond $ failWith err405
+      | otherwise = respond $ failWith err404
 
 methodRouterEmpty :: Method
                   -> IO (RouteResult (ExceptT ServantErr IO ()))
@@ -185,8 +185,8 @@ methodRouterEmpty method action = LeafRouter route'
           runAction action respond $ \ () ->
             succeedWith $ responseLBS noContent204 [] ""
       | pathIsEmpty request && requestMethod request /= method =
-          respond $ failWith WrongMethod
-      | otherwise = respond $ failWith NotFound
+          respond $ failWith err405
+      | otherwise = respond $ failWith err404
 
 -- | If you have a 'Delete' endpoint in your API,
 -- the handler for this endpoint is meant to delete
@@ -680,8 +680,9 @@ instance HasServer Raw where
   route Proxy rawApplication = LeafRouter $ \ request respond -> do
     r <- rawApplication
     case r of
-      RR (Left err)  -> respond $ failWith err
-      RR (Right app) -> app request (respond . succeedWith)
+      HandlerVal app  -> app request (respond . succeedWith)
+      Retriable  e    -> respond . failWith $ unSEPrio e
+      NonRetriable e  -> respond . succeedWith . responseServantErr $! unSEPrio e
 
 -- | If you use 'ReqBody' in one of the endpoints for your API,
 -- this automatically requires your server-side handler to be a function
@@ -721,8 +722,8 @@ instance ( AllCTUnrender list a, HasServer sublayout
       mrqbody <- handleCTypeH (Proxy :: Proxy list) (cs contentTypeH)
              <$> lazyRequestBody request
       case mrqbody of
-        Nothing -> return $ failWith $ UnsupportedMediaType
-        Just (Left e) -> return $ failWith $ InvalidBody e
+        Nothing -> return . NonRetriable $! ServantErrWithPriority err415 -- LeafRouter $ \_ respond ->
+        Just (Left e) -> return . NonRetriable $! ServantErrWithPriority err400 { errBody = cs e }
         Just (Right v) -> feedTo subserver v
 
 -- | Make sure the incoming request starts with @"/path"@, strip it and

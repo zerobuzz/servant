@@ -5,6 +5,7 @@ import qualified Data.Map                                   as M
 import           Data.Monoid                                ((<>))
 import           Data.Text                                  (Text)
 import           Network.Wai                                (Request, pathInfo)
+import           Servant.Server.Internal.ServantErr
 import           Servant.Server.Internal.PathInfo
 import           Servant.Server.Internal.RoutingApplication
 
@@ -55,13 +56,13 @@ runRouter (StaticRouter table) request respond =
       | Just router <- M.lookup first table
       -> let request' = request { pathInfo = rest }
          in  runRouter router request' respond
-    _ -> respond $ failWith NotFound
+    _ -> respond $ failWith err404
 runRouter (DynamicRouter fun)  request respond =
   case processedPathInfo request of
     first : rest
       -> let request' = request { pathInfo = rest }
          in  runRouter (fun first) request' respond
-    _ -> respond $ failWith NotFound
+    _ -> respond $ failWith err404
 runRouter (LeafRouter app)     request respond = app request respond
 runRouter (Choice r1 r2)       request respond =
   runRouter r1 request $ \ mResponse1 ->

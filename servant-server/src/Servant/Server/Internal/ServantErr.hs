@@ -4,6 +4,7 @@ module Servant.Server.Internal.ServantErr where
 
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.ByteString.Lazy  as LBS
+import           Data.List             (elemIndex)
 import qualified Network.HTTP.Types    as HTTP
 import           Network.Wai           (Response, responseLBS)
 
@@ -11,7 +12,7 @@ data ServantErr = ServantErr { errHTTPCode     :: Int
                              , errReasonPhrase :: String
                              , errBody         :: LBS.ByteString
                              , errHeaders      :: [HTTP.Header]
-                             } deriving (Show, Eq)
+                             } deriving (Show, Eq, Read)
 
 responseServantErr :: ServantErr -> Response
 responseServantErr ServantErr{..} = responseLBS status errHeaders errBody
@@ -227,3 +228,13 @@ err505 = ServantErr { errHTTPCode = 505
                     , errBody = ""
                     , errHeaders = []
                     }
+
+-- | Newtype for giving an 'Ord' instance on 'ServantErr' that states which
+-- ServantErr should be returned, given multiple ones.
+newtype ServantErrWithPriority = ServantErrWithPriority { unSEPrio :: ServantErr }
+    deriving (Eq, Show, Read)
+
+instance Ord ServantErrWithPriority where
+    compare (ServantErrWithPriority a) (ServantErrWithPriority b)
+      = elemIndex (errHTTPCode a) o `compare` elemIndex (errHTTPCode b) o
+      where o = [ 404 , 405 , 415 , 400 , 401 , 403 , 406 ]
