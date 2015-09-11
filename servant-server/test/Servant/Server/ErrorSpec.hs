@@ -7,9 +7,9 @@ module Servant.Server.ErrorSpec (spec) where
 
 import           Data.Aeson                 (encode)
 import qualified Data.ByteString.Lazy.Char8 as BC
-import           Control.Monad.Trans.Either (left)
 import           Data.Proxy
-import           Network.HTTP.Types         (methodGet, methodPost)
+import           Network.HTTP.Types         (hAccept, hContentType, methodGet,
+                                             methodPost)
 import           Test.Hspec
 import           Test.Hspec.Wai
 
@@ -42,24 +42,24 @@ type ErrorOrderApi = "home"
                   :> Capture "t" Int
                   :> Post '[JSON] Int
 
+
 errorOrderApi :: Proxy ErrorOrderApi
 errorOrderApi = Proxy
 
 errorOrderServer :: Server ErrorOrderApi
-errorOrderServer = \_ _ -> left err402
+errorOrderServer = \_ _ -> return 5
 
 errorOrder :: Spec
 errorOrder = describe "HTTP error order"
            $ with (return $ serve errorOrderApi errorOrderServer) $ do
-  let badContentType  = ("Content-Type", "text/plain")
-      badAccept       = ("Accept", "text/plain")
+  let badContentType  = (hContentType, "text/plain")
+      badAccept       = (hAccept, "text/plain")
       badMethod       = methodGet
       badUrl          = "home/nonexistent"
       badBody         = "nonsense"
-      goodContentType = ("Content-Type", "application/json")
-      goodAccept      = ("Accept", "application/json")
+      goodContentType = (hContentType, "application/json")
       goodMethod      = methodPost
-      goodUrl         = "home/5"
+      goodUrl         = "home/2"
       goodBody        = encode (5 :: Int)
 
   it "has 404 as its highest priority error" $ do
@@ -82,10 +82,6 @@ errorOrder = describe "HTTP error order"
     request goodMethod goodUrl [goodContentType, badAccept] goodBody
       `shouldRespondWith` 406
 
-  it "returns handler errors as its lower priority errors" $ do
-    request goodMethod goodUrl [goodContentType, goodAccept] goodBody
-      `shouldRespondWith` 402
-
 -- }}}
 ------------------------------------------------------------------------------
 -- * Error Retry {{{
@@ -95,9 +91,10 @@ type ErrorRetryApi
   :<|> "a" :> ReqBody '[PlainText] Int :> Post '[JSON] Int                -- 1
   :<|> "a" :> ReqBody '[JSON] Int      :> Post '[PlainText] Int           -- 2
   :<|> "a" :> ReqBody '[JSON] String   :> Post '[JSON] Int                -- 3
-  :<|> "a" :> ReqBody '[JSON] Int      :> Get  '[PlainText] Int           -- 4
-  :<|>        ReqBody '[JSON] Int      :> Get  '[JSON] Int                -- 5
+  :<|> "a" :> ReqBody '[JSON] Int      :> Get  '[JSON] Int                -- 4
+  :<|> "a" :> ReqBody '[JSON] Int      :> Get  '[PlainText] Int           -- 5
   :<|>        ReqBody '[JSON] Int      :> Get  '[JSON] Int                -- 6
+  :<|>        ReqBody '[JSON] Int      :> Post '[JSON] Int                -- 7
 
 errorRetryApi :: Proxy ErrorRetryApi
 errorRetryApi = Proxy
@@ -111,19 +108,20 @@ errorRetryServer
   :<|> (\_ -> return 4)
   :<|> (\_ -> return 5)
   :<|> (\_ -> return 6)
+  :<|> (\_ -> return 7)
 
 errorRetry :: Spec
 errorRetry = describe "Handler search"
            $ with (return $ serve errorRetryApi errorRetryServer) $ do
-  let plainCT     = ("Content-Type", "text/plain")
-      plainAccept = ("Accept", "text/plain")
-      jsonCT      = ("Content-Type", "application/json")
-      jsonAccept  = ("Accept", "application/json")
+  let plainCT     = (hContentType, "text/plain")
+      plainAccept = (hAccept, "text/plain")
+      jsonCT      = (hContentType, "application/json")
+      jsonAccept  = (hAccept, "application/json")
       jsonBody    = encode (1797 :: Int)
 
   it "should continue when URLs don't match" $ do
     request methodPost "" [jsonCT, jsonAccept] jsonBody
-     `shouldRespondWith` 201 { matchBody = Just $ encode (5 :: Int) }
+     `shouldRespondWith` 201 { matchBody = Just $ encode (7 :: Int) }
 
   it "should continue when methods don't match" $ do
     request methodGet "a" [jsonCT, jsonAccept] jsonBody
