@@ -41,8 +41,6 @@ import           Servant.API                ((:<|>) (..), (:>),
                                              Post, Put, RemoteHost, QueryFlag, QueryParam,
                                              QueryParams, Raw, ReqBody)
 import           Servant.Server             (Server, serve, ServantErr(..), err404)
-import           Servant.Server.Internal.RoutingApplication
-                                            (RouteMismatch (..))
 
 
 -- * test data types
@@ -91,7 +89,6 @@ spec = do
   rawSpec
   unionSpec
   prioErrorsSpec
-  errorsSpec
   responseHeadersSpec
   miscReqCombinatorsSpec
 
@@ -149,9 +146,9 @@ getSpec = do
       it "returns 204 if the type is '()'" $ do
         get "/empty" `shouldRespondWith` ""{ matchStatus = 204 }
 
-      it "returns 415 if the Accept header is not supported" $ do
+      it "returns 406 if the Accept header is not supported" $ do
         Test.Hspec.Wai.request methodGet "" [(hAccept, "crazy/mime")] ""
-          `shouldRespondWith` 415
+          `shouldRespondWith` 406
 
 
 headSpec :: Spec
@@ -177,9 +174,9 @@ headSpec = do
         response <- Test.Hspec.Wai.request methodHead "/empty" [] ""
         return response `shouldRespondWith` ""{ matchStatus = 204 }
 
-      it "returns 415 if the Accept header is not supported" $ do
+      it "returns 406 if the Accept header is not supported" $ do
         Test.Hspec.Wai.request methodHead "" [(hAccept, "crazy/mime")] ""
-          `shouldRespondWith` 415
+          `shouldRespondWith` 406
 
 
 type QueryParamApi = QueryParam "name" String :> Get '[JSON] Person
@@ -598,10 +595,10 @@ responseHeadersSpec = describe "ResponseHeaders" $ do
         Test.Hspec.Wai.request method "blahblah" [] ""
           `shouldRespondWith` 404
 
-    it "returns 415 if the Accept header is not supported" $
+    it "returns 406 if the Accept header is not supported" $
       forM_ methods $ \(method,_) ->
         Test.Hspec.Wai.request method "" [(hAccept, "crazy/mime")] ""
-          `shouldRespondWith` 415
+          `shouldRespondWith` 406
 
 type PrioErrorsApi = ReqBody '[JSON] Person :> "foo" :> Get '[JSON] Integer
 
@@ -651,51 +648,6 @@ prioErrorsSpec = describe "PrioErrors" $ do
     check put' "/"    vjson 404
     check put' "/bar" vjson 404
     check put' "/foo" vjson 405
-
--- | Test server error functionality.
-errorsSpec :: Spec
-errorsSpec = do
-  let he = HttpError status409 (Just "A custom error")
-  let ib = InvalidBody "The body is invalid"
-  let wm = WrongMethod
-  let nf = NotFound
-
-  describe "Servant.Server.Internal.RouteMismatch" $ do
-    it "HttpError > *" $ do
-      ib <> he `shouldBe` he
-      wm <> he `shouldBe` he
-      nf <> he `shouldBe` he
-
-      he <> ib `shouldBe` he
-      he <> wm `shouldBe` he
-      he <> nf `shouldBe` he
-
-    it "HE > InvalidBody > (WM,NF)" $ do
-      he <> ib `shouldBe` he
-      wm <> ib `shouldBe` ib
-      nf <> ib `shouldBe` ib
-
-      ib <> he `shouldBe` he
-      ib <> wm `shouldBe` ib
-      ib <> nf `shouldBe` ib
-
-    it "HE > IB > WrongMethod > NF" $ do
-      he <> wm `shouldBe` he
-      ib <> wm `shouldBe` ib
-      nf <> wm `shouldBe` wm
-
-      wm <> he `shouldBe` he
-      wm <> ib `shouldBe` ib
-      wm <> nf `shouldBe` wm
-
-    it "* > NotFound" $ do
-      he <> nf `shouldBe` he
-      ib <> nf `shouldBe` ib
-      wm <> nf `shouldBe` wm
-
-      nf <> he `shouldBe` he
-      nf <> ib `shouldBe` ib
-      nf <> wm `shouldBe` wm
 
 type MiscCombinatorsAPI
   =    "version" :> HttpVersion :> Get '[JSON] String

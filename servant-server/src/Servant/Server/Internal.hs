@@ -136,7 +136,7 @@ processMethodRouter :: forall a. ConvertibleStrings a B.ByteString
                     -> Maybe [(HeaderName, B.ByteString)]
                     -> Request -> RouteResult Response
 processMethodRouter handleA status method headers request = case handleA of
-  Nothing -> failWith err415
+  Nothing -> NonRetriable $! ServantErrWithPriority err406
   Just (contentT, body) -> succeedWith $ responseLBS status hdrs bdy
     where
       bdy = if allowedMethodHead method request then "" else body
@@ -722,7 +722,7 @@ instance ( AllCTUnrender list a, HasServer sublayout
       mrqbody <- handleCTypeH (Proxy :: Proxy list) (cs contentTypeH)
              <$> lazyRequestBody request
       case mrqbody of
-        Nothing -> return . NonRetriable $! ServantErrWithPriority err415 -- LeafRouter $ \_ respond ->
+        Nothing -> return . NonRetriable $! ServantErrWithPriority err415
         Just (Left e) -> return . NonRetriable $! ServantErrWithPriority err400 { errBody = cs e }
         Just (Right v) -> feedTo subserver v
 

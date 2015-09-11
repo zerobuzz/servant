@@ -15,8 +15,6 @@ import qualified Data.ByteString                    as B
 import qualified Data.ByteString.Lazy               as BL
 import           Data.IORef                         (newIORef, readIORef,
                                                      writeIORef)
-import           Network.HTTP.Types                 hiding (Header,
-                                                     ResponseHeaders)
 import           Network.Wai                        (Application, Request,
                                                      Response, ResponseReceived,
                                                      requestBody,
@@ -35,6 +33,8 @@ data RouteResult a =
   | HandlerVal a
   deriving (Eq, Show, Read, Functor)
 
+-- Monoid instance, where 'mappend' picks which of two responses should be
+-- returned (left-biased).
 instance Monoid (RouteResult a) where
     mempty = Retriable $ ServantErrWithPriority err404
     Retriable a `mappend` Retriable b = if a > b
@@ -42,40 +42,8 @@ instance Monoid (RouteResult a) where
         else Retriable b
     Retriable _ `mappend` x           = x
     x           `mappend` Retriable _ = x
-    NonRetriable a `mappend` NonRetriable b = if a > b
-        then NonRetriable a
-        else NonRetriable b
-    NonRetriable _ `mappend` HandlerVal a = HandlerVal a
-    HandlerVal a   `mappend` _            = HandlerVal a
+    x           `mappend` _           = x
 
-
-instance Eq a => Ord (RouteResult a) where
-    Retriable a    <= Retriable b    = a <= b
-    Retriable _    <= _              = True
-    _              <= Retriable _    = False
-    NonRetriable a <= NonRetriable b = a <= b
-    NonRetriable _ <= _              = True
-    _              <= NonRetriable _ = False
-    HandlerVal _   <= _              = True
-
--- Note that the ordering of the constructors has great significance! It
--- determines the Ord instance and, consequently, the monoid instance.
-data RouteMismatch =
-    NotFound           -- ^ the usual "not found" error
-  | WrongMethod        -- ^ a more informative "you just got the HTTP method wrong" error
-  | UnsupportedMediaType -- ^ request body has unsupported media type
-  | InvalidBody String -- ^ an even more informative "your json request body wasn't valid" error
-  | HttpError Status (Maybe BL.ByteString)  -- ^ an even even more informative arbitrary HTTP response code error.
-  deriving (Eq, Ord, Show)
-
-instance Monoid RouteMismatch where
-  mempty = NotFound
-  -- The following isn't great, since it picks @InvalidBody@ based on
-  -- alphabetical ordering, but any choice would be arbitrary.
-  --
-  -- "As one judge said to the other, 'Be just and if you can't be just, be
-  -- arbitrary'" -- William Burroughs
-  mappend = max
 
 data ReqBodyState = Uncalled
                   | Called !B.ByteString
