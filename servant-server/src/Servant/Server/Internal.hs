@@ -118,11 +118,10 @@ instance (KnownSymbol capture, FromHttpApiData a, HasServer sublayout)
      a -> ServerT sublayout m
 
   route Proxy subserver =
-    DynamicRouter $ \ first ->
-      route (Proxy :: Proxy sublayout)
-            (case captured captureProxy first of
-               Nothing  -> return $ failWith err404
-               Just v   -> feedTo subserver v)
+    DynamicRouter $ \ first -> case captured captureProxy first of
+       Nothing  -> LeafRouter (\_ r -> r $ failWith err404)
+       Just v   -> route (Proxy :: Proxy sublayout) (feedTo subserver v)
+
     where captureProxy = Proxy :: Proxy (Capture capture a)
 
 allowedMethodHead :: Method -> Request -> Bool

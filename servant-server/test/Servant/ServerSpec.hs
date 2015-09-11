@@ -14,7 +14,6 @@ import           Control.Monad.Trans.Except (ExceptT, throwE)
 import           Data.Aeson                 (FromJSON, ToJSON, decode', encode)
 import           Data.ByteString.Conversion ()
 import           Data.Char                  (toUpper)
-import           Data.Monoid                ((<>))
 import           Data.Proxy                 (Proxy (Proxy))
 import           Data.String                (fromString)
 import           Data.String.Conversions    (cs)
@@ -23,7 +22,7 @@ import           GHC.Generics               (Generic)
 import           Network.HTTP.Types         (hAccept, hContentType,
                                              methodDelete, methodGet, methodHead,
                                              methodPatch, methodPost, methodPut,
-                                             ok200, parseQuery, status409)
+                                             ok200, parseQuery)
 import           Network.Wai                (Application, Request, pathInfo,
                                              queryString, rawQueryString,
                                              responseLBS)

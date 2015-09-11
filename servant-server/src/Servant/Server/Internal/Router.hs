@@ -70,4 +70,3 @@ runRouter (Choice r1 r2)       request respond =
       then runRouter r2 request $ \ mResponse2 ->
              respond (mResponse1 <> mResponse2)
       else respond mResponse1
-
