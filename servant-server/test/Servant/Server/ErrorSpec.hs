@@ -31,8 +31,9 @@ import           Servant
 
 spec :: Spec
 spec = describe "HTTP Errors" $ do
-    errorOrder
-    errorRetry
+    errorOrderSpec
+    errorRetrySpec
+    errorChoiceSpec
 
 ------------------------------------------------------------------------------
 -- * Error Order {{{
@@ -49,8 +50,8 @@ errorOrderApi = Proxy
 errorOrderServer :: Server ErrorOrderApi
 errorOrderServer = \_ _ -> return 5
 
-errorOrder :: Spec
-errorOrder = describe "HTTP error order"
+errorOrderSpec :: Spec
+errorOrderSpec = describe "HTTP error order"
            $ with (return $ serve errorOrderApi errorOrderServer) $ do
   let badContentType  = (hContentType, "text/plain")
       badAccept       = (hAccept, "text/plain")
@@ -110,9 +111,10 @@ errorRetryServer
   :<|> (\_ -> return 6)
   :<|> (\_ -> return 7)
 
-errorRetry :: Spec
-errorRetry = describe "Handler search"
+errorRetrySpec :: Spec
+errorRetrySpec = describe "Handler search"
            $ with (return $ serve errorRetryApi errorRetryServer) $ do
+
   let plainCT     = (hContentType, "text/plain")
       plainAccept = (hAccept, "text/plain")
       jsonCT      = (hContentType, "application/json")
@@ -138,6 +140,50 @@ errorRetry = describe "Handler search"
   it "should not continue when Accepts don't match" $ do
     request methodPost "a" [jsonCT, plainAccept] jsonBody
      `shouldRespondWith` 406
+
+-- }}}
+------------------------------------------------------------------------------
+-- * Error Choice {{{
+
+type ErrorChoiceApi
+     = "path0" :> Get '[JSON] Int                                     -- 0
+  :<|> "path1" :> Post '[JSON] Int                                    -- 1
+  :<|> "path2" :> Post '[PlainText] Int                               -- 2
+  :<|> "path3" :> ReqBody '[JSON] Int :> Post '[PlainText] Int        -- 3
+  :<|> "path4" :> (ReqBody '[PlainText] Int :> Post '[PlainText] Int  -- 4
+             :<|>  ReqBody '[PlainText] Int :> Post '[JSON] Int)      -- 5
+
+errorChoiceApi :: Proxy ErrorChoiceApi
+errorChoiceApi = Proxy
+
+errorChoiceServer :: Server ErrorChoiceApi
+errorChoiceServer = return 0
+               :<|> return 1
+               :<|> return 2
+               :<|> (\_ -> return 3)
+               :<|> (\_ -> return 4)
+               :<|> (\_ -> return 5)
+
+
+errorChoiceSpec :: Spec
+errorChoiceSpec = describe "Multiple handlers return errors"
+                $ with (return $ serve errorChoiceApi errorChoiceServer) $ do
+
+  it "should respond with 404 if no path matches" $ do
+    request methodGet "" [] "" `shouldRespondWith` 404
+
+  it "should respond with 405 if a path but not method matches" $ do
+    request methodGet "path2" [] "" `shouldRespondWith` 405
+
+  it "should respond with the corresponding error if path and method match" $ do
+    request methodPost "path3" [(hContentType, "text/plain;charset=utf-8")] ""
+      `shouldRespondWith` 415
+    request methodPost "path3" [(hContentType, "application/json")] ""
+      `shouldRespondWith` 400
+    request methodPost "path4" [(hContentType, "text/plain;charset=utf-8"),
+                                (hAccept, "application/json")] ""
+      `shouldRespondWith` 406
+
 
 -- }}}
 ------------------------------------------------------------------------------

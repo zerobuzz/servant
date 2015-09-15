@@ -381,7 +381,7 @@ postSpec = do
       it "returns 204 if the type is '()'" $ do
         post' "empty" "" `shouldRespondWith` ""{ matchStatus = 204 }
 
-      it "responds with 415 if the requested media type is unsupported" $ do
+      it "responds with 415 if the request body media type is unsupported" $ do
         let post'' x = Test.Hspec.Wai.request methodPost x [(hContentType
                                                             , "application/nonsense")]
         post'' "/" "anything at all" `shouldRespondWith` 415
@@ -423,7 +423,7 @@ putSpec = do
       it "returns 204 if the type is '()'" $ do
         put' "empty" "" `shouldRespondWith` ""{ matchStatus = 204 }
 
-      it "responds with 415 if the requested media type is unsupported" $ do
+      it "responds with 415 if the request body media type is unsupported" $ do
         let put'' x = Test.Hspec.Wai.request methodPut x [(hContentType
                                                             , "application/nonsense")]
         put'' "/" "anything at all" `shouldRespondWith` 415
@@ -465,7 +465,7 @@ patchSpec = do
       it "returns 204 if the type is '()'" $ do
         patch' "empty" "" `shouldRespondWith` ""{ matchStatus = 204 }
 
-      it "responds with 415 if the requested media type is unsupported" $ do
+      it "responds with 415 if the request body media type is unsupported" $ do
         let patch'' x = Test.Hspec.Wai.request methodPatch x [(hContentType
                                                             , "application/nonsense")]
         patch'' "/" "anything at all" `shouldRespondWith` 415
