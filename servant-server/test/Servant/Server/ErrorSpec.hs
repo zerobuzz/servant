@@ -148,7 +148,7 @@ prioErrorsSpec = describe "PrioErrors" $ do
 type ErrorRetryApi
      = "a" :> ReqBody '[JSON] Int      :> Post '[JSON] Int                -- err402
   :<|> "a" :> ReqBody '[PlainText] Int :> Post '[JSON] Int                -- 1
-  :<|> "a" :> ReqBody '[JSON] Int      :> Post '[PlainText] Int           -- 2
+  :<|> "a" :> ReqBody '[JSON] Int      :> Post '[PlainText] Int           -- err402
   :<|> "a" :> ReqBody '[JSON] String   :> Post '[JSON] Int                -- 3
   :<|> "a" :> ReqBody '[JSON] Int      :> Get  '[JSON] Int                -- 4
   :<|> "a" :> ReqBody '[JSON] Int      :> Get  '[PlainText] Int           -- 5
@@ -162,7 +162,7 @@ errorRetryServer :: Server ErrorRetryApi
 errorRetryServer
      = (\_ -> throwE err402)
   :<|> (\_ -> return 1)
-  :<|> (\_ -> return 2)
+  :<|> (\_ -> throwE err402)
   :<|> (\_ -> return 3)
   :<|> (\_ -> return 4)
   :<|> (\_ -> return 5)
