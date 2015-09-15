@@ -135,7 +135,7 @@ processMethodRouter :: forall a. ConvertibleStrings a B.ByteString
                     -> Maybe [(HeaderName, B.ByteString)]
                     -> Request -> RouteResult Response
 processMethodRouter handleA status method headers request = case handleA of
-  Nothing -> NonRetriable err406
+  Nothing -> failFatallyWith err406
   Just (contentT, body) -> succeedWith $ responseLBS status hdrs bdy
     where
       bdy = if allowedMethodHead method request then "" else body
@@ -681,7 +681,7 @@ instance HasServer Raw where
     case r of
       HandlerVal app  -> app request (respond . succeedWith)
       Retriable  e    -> respond $ failWith e
-      NonRetriable e  -> respond . succeedWith $! responseServantErr e
+      NonRetriable e  -> respond $! failFatallyWith e
 
 -- | If you use 'ReqBody' in one of the endpoints for your API,
 -- this automatically requires your server-side handler to be a function
@@ -721,8 +721,8 @@ instance ( AllCTUnrender list a, HasServer sublayout
       mrqbody <- handleCTypeH (Proxy :: Proxy list) (cs contentTypeH)
              <$> lazyRequestBody request
       case mrqbody of
-        Nothing -> return $! NonRetriable err415
-        Just (Left e) -> return $! NonRetriable  err400 { errBody = cs e }
+        Nothing -> return $! failFatallyWith err415
+        Just (Left e) -> return $! failFatallyWith err400 { errBody = cs e }
         Just (Right v) -> feedTo subserver v
 
 -- | Make sure the incoming request starts with @"/path"@, strip it and

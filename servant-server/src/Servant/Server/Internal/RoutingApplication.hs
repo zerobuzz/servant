@@ -95,9 +95,15 @@ extractR (HandlerVal (_ :<|> b)) = HandlerVal b
 extractR (Retriable x)           = Retriable x
 extractR (NonRetriable x)        = NonRetriable x
 
+-- | Fail with a @ServantErr@, but keep trying other paths and.
 failWith :: ServantErr -> RouteResult a
 failWith = Retriable
 
+-- | Fail with immediately @ServantErr@.
+failFatallyWith :: ServantErr -> RouteResult a
+failFatallyWith = NonRetriable
+
+-- | Return a value, and don't try other paths.
 succeedWith :: a -> RouteResult a
 succeedWith = HandlerVal
 
