@@ -68,5 +68,12 @@ runRouter (Choice r1 r2)       request respond =
   runRouter r1 request $ \ mResponse1 ->
     if isMismatch mResponse1
       then runRouter r2 request $ \ mResponse2 ->
-             respond (mResponse1 <> mResponse2)
+             respond (highestPri mResponse1 mResponse2)
       else respond mResponse1
+  where
+    highestPri (Retriable r1) (Retriable r2) =
+      if errHTTPCode r1 == 404 && errHTTPCode r2 /= 404
+        then (Retriable r2)
+        else (Retriable r1)
+    highestPri (Retriable _) y = y
+    highestPri x _ = x

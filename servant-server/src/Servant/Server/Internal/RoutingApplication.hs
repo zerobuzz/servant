@@ -28,22 +28,11 @@ type RoutingApplication =
 
 -- | A wrapper around @'Either' 'RouteMismatch' a@.
 data RouteResult a =
-    Retriable ServantErrWithPriority      -- ^ Keep trying other paths
-  | NonRetriable ServantErrWithPriority   -- ^ Stop trying.
+    Retriable ServantErr      -- ^ Keep trying other paths. The @ServantErr@
+                              -- should only be 404 or 405.
+  | NonRetriable ServantErr   -- ^ Stop trying.
   | HandlerVal a
   deriving (Eq, Show, Read, Functor)
-
--- Monoid instance, where 'mappend' picks which of two responses should be
--- returned (left-biased).
-instance Monoid (RouteResult a) where
-    mempty = Retriable $ ServantErrWithPriority err404
-    Retriable a `mappend` Retriable b = if a > b
-        then Retriable a
-        else Retriable b
-    Retriable _ `mappend` x           = x
-    x           `mappend` Retriable _ = x
-    x           `mappend` _           = x
-
 
 data ReqBodyState = Uncalled
                   | Called !B.ByteString
@@ -75,8 +64,8 @@ toApplication ra request respond = do
   ra request{ requestBody = memoReqBody } routingRespond
  where
   routingRespond :: RouteResult Response -> IO ResponseReceived
-  routingRespond (Retriable err)    = respond . responseServantErr $! unSEPrio err
-  routingRespond (NonRetriable err) = respond . responseServantErr $! unSEPrio err
+  routingRespond (Retriable err)    = respond $! responseServantErr err
+  routingRespond (NonRetriable err) = respond $! responseServantErr err
   routingRespond (HandlerVal v)     = respond v
 
 runAction :: IO (RouteResult (ExceptT ServantErr IO a))
@@ -86,11 +75,11 @@ runAction :: IO (RouteResult (ExceptT ServantErr IO a))
 runAction action respond k = action >>= go >>= respond
   where
     go (Retriable  e)   = return $! Retriable e
-    go (NonRetriable e) = return . succeedWith . responseServantErr $! unSEPrio e
+    go (NonRetriable e) = return . succeedWith $! responseServantErr e
     go (HandlerVal a)   = do
       e <- runExceptT a
       case e of
-        Left err -> return . succeedWith . responseServantErr $! err
+        Left err -> return . succeedWith $! responseServantErr err
         Right x  -> return $! k x
 
 feedTo :: IO (RouteResult (a -> b)) -> a -> IO (RouteResult b)
@@ -107,7 +96,7 @@ extractR (Retriable x)           = Retriable x
 extractR (NonRetriable x)        = NonRetriable x
 
 failWith :: ServantErr -> RouteResult a
-failWith = Retriable . ServantErrWithPriority
+failWith = Retriable
 
 succeedWith :: a -> RouteResult a
 succeedWith = HandlerVal
