@@ -6,10 +6,11 @@
 module Servant.Server.ErrorSpec (spec) where
 
 import           Data.Aeson                 (encode)
-import qualified Data.ByteString.Lazy.Char8 as BC
+import qualified Data.ByteString.Lazy.Char8 as BCL
+import qualified Data.ByteString.Char8      as BC
 import           Data.Proxy
 import           Network.HTTP.Types         (hAccept, hContentType, methodGet,
-                                             methodPost)
+                                             methodPost, methodPut)
 import           Test.Hspec
 import           Test.Hspec.Wai
 
@@ -36,6 +37,7 @@ import           Servant
 spec :: Spec
 spec = describe "HTTP Errors" $ do
     errorOrderSpec
+    prioErrorsSpec
     errorRetrySpec
     errorChoiceSpec
 
@@ -86,6 +88,52 @@ errorOrderSpec = describe "HTTP error order"
   it "has 406 as its fifth highest priority error" $ do
     request goodMethod goodUrl [goodContentType, badAccept] goodBody
       `shouldRespondWith` 406
+
+type PrioErrorsApi = ReqBody '[JSON] Integer :> "foo" :> Get '[JSON] Integer
+
+prioErrorsApi :: Proxy PrioErrorsApi
+prioErrorsApi = Proxy
+
+-- Check whether matching continues even if a 'ReqBody' or similar construct
+-- is encountered early in a path. We don't want to see a complaint about the
+-- request body unless the path actually matches.
+prioErrorsSpec :: Spec
+prioErrorsSpec = describe "PrioErrors" $ do
+  let server = return
+  with (return $ serve prioErrorsApi server) $ do
+    let check (mdescr, method) path (cdescr, ctype, body) resp =
+          it fulldescr $
+            Test.Hspec.Wai.request method path [(hContentType, ctype)] body
+              `shouldRespondWith` resp
+          where
+            fulldescr = "returns " ++ show (matchStatus resp) ++ " on " ++ mdescr
+                     ++ " " ++ (BC.unpack path) ++ " (" ++ cdescr ++ ")"
+
+        get' = ("GET", methodGet)
+        put' = ("PUT", methodPut)
+
+        txt   = ("text"        , "text/plain;charset=utf8"      , "42"        )
+        ijson = ("invalid json", "application/json;charset=utf8", "invalid"   )
+        vjson = ("valid json"  , "application/json;charset=utf8", encode (5 :: Int))
+
+    check get' "/"    txt   404
+    check get' "/bar" txt   404
+    check get' "/foo" txt   415
+    check put' "/"    txt   404
+    check put' "/bar" txt   404
+    check put' "/foo" txt   405
+    check get' "/"    ijson 404
+    check get' "/bar" ijson 404
+    check get' "/foo" ijson 400
+    check put' "/"    ijson 404
+    check put' "/bar" ijson 404
+    check put' "/foo" ijson 405
+    check get' "/"    vjson 404
+    check get' "/bar" vjson 404
+    check get' "/foo" vjson 200
+    check put' "/"    vjson 404
+    check put' "/bar" vjson 404
+    check put' "/foo" vjson 405
 
 -- }}}
 ------------------------------------------------------------------------------
@@ -194,8 +242,10 @@ errorChoiceSpec = describe "Multiple handlers return errors"
 -- * Instances {{{
 
 instance MimeUnrender PlainText Int where
-    mimeUnrender _ = Right . read . BC.unpack
+    mimeUnrender _ = Right . read . BCL.unpack
 
 instance MimeRender PlainText Int where
-    mimeRender _ = BC.pack . show
+    mimeRender _ = BCL.pack . show
 -- }}}
+--
+

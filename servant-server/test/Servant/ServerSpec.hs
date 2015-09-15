@@ -1,10 +1,10 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeOperators       #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
-{-# LANGUAGE FlexibleInstances       #-}
+{-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Servant.ServerSpec where
 
@@ -20,26 +20,29 @@ import           Data.String.Conversions    (cs)
 import qualified Data.Text                  as T
 import           GHC.Generics               (Generic)
 import           Network.HTTP.Types         (hAccept, hContentType,
-                                             methodDelete, methodGet, methodHead,
-                                             methodPatch, methodPost, methodPut,
-                                             ok200, parseQuery)
+                                             methodDelete, methodGet,
+                                             methodHead, methodPatch,
+                                             methodPost, methodPut, ok200,
+                                             parseQuery)
 import           Network.Wai                (Application, Request, pathInfo,
                                              queryString, rawQueryString,
                                              responseLBS)
 import           Network.Wai.Test           (defaultRequest, request,
                                              runSession, simpleBody)
+import           Servant.API                ((:<|>) (..), (:>), Capture, Delete,
+                                             Get, Header (..), Headers,
+                                             HttpVersion, IsSecure (..), JSON,
+                                             MatrixFlag, MatrixParam,
+                                             MatrixParams, Patch, PlainText,
+                                             Post, Put, QueryFlag, QueryParam,
+                                             QueryParams, Raw, RemoteHost,
+                                             ReqBody, addHeader)
+import           Servant.Server             (ServantErr (..), Server, err404,
+                                             serve)
 import           Test.Hspec                 (Spec, describe, it, shouldBe)
 import           Test.Hspec.Wai             (get, liftIO, matchHeaders,
                                              matchStatus, post, request,
                                              shouldRespondWith, with, (<:>))
-import           Servant.API                ((:<|>) (..), (:>),
-                                             addHeader, Capture,
-                                             Delete, Get, Header (..), Headers,
-                                             HttpVersion, IsSecure(..), JSON, MatrixFlag,
-                                             MatrixParam, MatrixParams, Patch, PlainText,
-                                             Post, Put, RemoteHost, QueryFlag, QueryParam,
-                                             QueryParams, Raw, ReqBody)
-import           Servant.Server             (Server, serve, ServantErr(..), err404)
 
 
 -- * test data types
@@ -87,7 +90,6 @@ spec = do
   headerSpec
   rawSpec
   unionSpec
-  prioErrorsSpec
   responseHeadersSpec
   miscReqCombinatorsSpec
 
@@ -598,55 +600,6 @@ responseHeadersSpec = describe "ResponseHeaders" $ do
       forM_ methods $ \(method,_) ->
         Test.Hspec.Wai.request method "" [(hAccept, "crazy/mime")] ""
           `shouldRespondWith` 406
-
-type PrioErrorsApi = ReqBody '[JSON] Person :> "foo" :> Get '[JSON] Integer
-
-prioErrorsApi :: Proxy PrioErrorsApi
-prioErrorsApi = Proxy
-
--- | Test the relative priority of error responses from the server.
---
--- In particular, we check whether matching continues even if a 'ReqBody'
--- or similar construct is encountered early in a path. We don't want to
--- see a complaint about the request body unless the path actually matches.
---
-prioErrorsSpec :: Spec
-prioErrorsSpec = describe "PrioErrors" $ do
-  let server = return . age
-  with (return $ serve prioErrorsApi server) $ do
-    let check (mdescr, method) path (cdescr, ctype, body) resp =
-          it fulldescr $
-            Test.Hspec.Wai.request method path [(hContentType, ctype)] body
-              `shouldRespondWith` resp
-          where
-            fulldescr = "returns " ++ show (matchStatus resp) ++ " on " ++ mdescr
-                     ++ " " ++ cs path ++ " (" ++ cdescr ++ ")"
-
-        get' = ("GET", methodGet)
-        put' = ("PUT", methodPut)
-
-        txt   = ("text"        , "text/plain;charset=utf8"      , "42"        )
-        ijson = ("invalid json", "application/json;charset=utf8", "invalid"   )
-        vjson = ("valid json"  , "application/json;charset=utf8", encode alice)
-
-    check get' "/"    txt   404
-    check get' "/bar" txt   404
-    check get' "/foo" txt   415
-    check put' "/"    txt   404
-    check put' "/bar" txt   404
-    check put' "/foo" txt   405
-    check get' "/"    ijson 404
-    check get' "/bar" ijson 404
-    check get' "/foo" ijson 400
-    check put' "/"    ijson 404
-    check put' "/bar" ijson 404
-    check put' "/foo" ijson 405
-    check get' "/"    vjson 404
-    check get' "/bar" vjson 404
-    check get' "/foo" vjson 200
-    check put' "/"    vjson 404
-    check put' "/bar" vjson 404
-    check put' "/foo" vjson 405
 
 type MiscCombinatorsAPI
   =    "version" :> HttpVersion :> Get '[JSON] String

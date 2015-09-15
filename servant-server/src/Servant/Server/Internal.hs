@@ -1,15 +1,15 @@
-{-# LANGUAGE CPP                  #-}
-{-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE FlexibleContexts     #-}
-{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings    #-}
-{-# LANGUAGE PolyKinds            #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TypeFamilies         #-}
-{-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
 #if !MIN_VERSION_base(4,8,0)
-{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE OverlappingInstances       #-}
 #endif
 
 module Servant.Server.Internal
@@ -27,9 +27,9 @@ import           Control.Monad.Trans.Except  (ExceptT)
 import qualified Data.ByteString             as B
 import qualified Data.ByteString.Lazy        as BL
 import qualified Data.Map                    as M
-import           Data.Maybe                  (mapMaybe, fromMaybe)
+import           Data.Maybe                  (fromMaybe, mapMaybe)
 import           Data.String                 (fromString)
-import           Data.String.Conversions     (cs, (<>), ConvertibleStrings)
+import           Data.String.Conversions     (ConvertibleStrings, cs, (<>))
 import           Data.Text                   (Text)
 import qualified Data.Text                   as T
 import           Data.Text.Encoding          (encodeUtf8)
@@ -37,22 +37,24 @@ import           Data.Typeable
 import           GHC.TypeLits                (KnownSymbol, symbolVal)
 import           Network.HTTP.Types          hiding (Header, ResponseHeaders)
 import           Network.Socket              (SockAddr)
-import           Network.Wai                 (Application, lazyRequestBody,
-                                              rawQueryString, requestHeaders,
-                                              requestMethod, responseLBS, remoteHost,
-                                              isSecure, vault, httpVersion, Response,
-                                              Request)
+import           Network.Wai                 (Application, Request, Response,
+                                              httpVersion, isSecure,
+                                              lazyRequestBody, rawQueryString,
+                                              remoteHost, requestHeaders,
+                                              requestMethod, responseLBS, vault)
 import           Servant.API                 ((:<|>) (..), (:>), Capture,
                                               Delete, Get, Header,
-                                              IsSecure(..), MatrixFlag, MatrixParam,
-                                              MatrixParams, Patch, Post, Put,
-                                              QueryFlag, QueryParam, QueryParams,
-                                              Raw, RemoteHost, ReqBody, Vault)
+                                              IsSecure (..), MatrixFlag,
+                                              MatrixParam, MatrixParams, Patch,
+                                              Post, Put, QueryFlag, QueryParam,
+                                              QueryParams, Raw, RemoteHost,
+                                              ReqBody, Vault)
 import           Servant.API.ContentTypes    (AcceptHeader (..),
                                               AllCTRender (..),
                                               AllCTUnrender (..))
-import           Servant.API.ResponseHeaders (Headers, getResponse, GetHeaders,
-                                              getHeaders)
+import           Servant.API.ResponseHeaders (GetHeaders, Headers, getHeaders,
+                                              getResponse)
+import           Servant.Common.Text         (FromText, fromText)
 
 import           Servant.Server.Internal.PathInfo
 import           Servant.Server.Internal.Router
@@ -119,7 +121,7 @@ instance (KnownSymbol capture, FromHttpApiData a, HasServer sublayout)
 
   route Proxy subserver =
     DynamicRouter $ \ first -> case captured captureProxy first of
-       Nothing  -> LeafRouter (\_ r -> r $ failWith err404)
+       Nothing  -> LeafRouter (\_ r -> r $ Fail err404)
        Just v   -> route (Proxy :: Proxy sublayout) (feedTo subserver v)
 
     where captureProxy = Proxy :: Proxy (Capture capture a)
@@ -135,8 +137,8 @@ processMethodRouter :: forall a. ConvertibleStrings a B.ByteString
                     -> Maybe [(HeaderName, B.ByteString)]
                     -> Request -> RouteResult Response
 processMethodRouter handleA status method headers request = case handleA of
-  Nothing -> failFatallyWith err406
-  Just (contentT, body) -> succeedWith $ responseLBS status hdrs bdy
+  Nothing -> FailFatal err406
+  Just (contentT, body) -> Route $! responseLBS status hdrs bdy
     where
       bdy = if allowedMethodHead method request then "" else body
       hdrs = (hContentType, cs contentT) : (fromMaybe [] headers)
@@ -154,8 +156,8 @@ methodRouter method proxy status action = LeafRouter route'
                 handleA = handleAcceptH proxy (AcceptHeader accH) output
             processMethodRouter handleA status method Nothing request
       | pathIsEmpty request && requestMethod request /= method =
-          respond $ failWith err405
-      | otherwise = respond $ failWith err404
+          respond $ Fail err405
+      | otherwise = respond $ Fail err404
 
 methodRouterHeaders :: (GetHeaders (Headers h v), AllCTRender ctypes v)
                     => Method -> Proxy ctypes -> Status
@@ -171,8 +173,8 @@ methodRouterHeaders method proxy status action = LeafRouter route'
               handleA = handleAcceptH proxy (AcceptHeader accH) (getResponse output)
           processMethodRouter handleA status method (Just headers) request
       | pathIsEmpty request && requestMethod request /= method =
-          respond $ failWith err405
-      | otherwise = respond $ failWith err404
+          respond $ Fail err405
+      | otherwise = respond $ Fail err404
 
 methodRouterEmpty :: Method
                   -> IO (RouteResult (ExceptT ServantErr IO ()))
@@ -182,10 +184,10 @@ methodRouterEmpty method action = LeafRouter route'
     route' request respond
       | pathIsEmpty request && allowedMethod method request = do
           runAction action respond $ \ () ->
-            succeedWith $ responseLBS noContent204 [] ""
+            Route $! responseLBS noContent204 [] ""
       | pathIsEmpty request && requestMethod request /= method =
-          respond $ failWith err405
-      | otherwise = respond $ failWith err404
+          respond $ Fail err405
+      | otherwise = respond $ Fail err404
 
 -- | If you have a 'Delete' endpoint in your API,
 -- the handler for this endpoint is meant to delete
@@ -679,9 +681,9 @@ instance HasServer Raw where
   route Proxy rawApplication = LeafRouter $ \ request respond -> do
     r <- rawApplication
     case r of
-      HandlerVal app  -> app request (respond . succeedWith)
-      Retriable  e    -> respond $ failWith e
-      NonRetriable e  -> respond $! failFatallyWith e
+      Route app   -> app request (respond . Route)
+      Fail a      -> respond $ Fail a
+      FailFatal e -> respond $ FailFatal e
 
 -- | If you use 'ReqBody' in one of the endpoints for your API,
 -- this automatically requires your server-side handler to be a function
@@ -721,8 +723,8 @@ instance ( AllCTUnrender list a, HasServer sublayout
       mrqbody <- handleCTypeH (Proxy :: Proxy list) (cs contentTypeH)
              <$> lazyRequestBody request
       case mrqbody of
-        Nothing -> return $! failFatallyWith err415
-        Just (Left e) -> return $! failFatallyWith err400 { errBody = cs e }
+        Nothing -> return $ FailFatal err415
+        Just (Left e) -> return $ FailFatal err400 { errBody = cs e }
         Just (Right v) -> feedTo subserver v
 
 -- | Make sure the incoming request starts with @"/path"@, strip it and
