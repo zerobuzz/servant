@@ -75,7 +75,7 @@ runAction :: IO (RouteResult (ExceptT ServantErr IO a))
 runAction action respond k = action >>= go >>= respond
   where
     go (Retriable  e)   = return $! Retriable e
-    go (NonRetriable e) = return . succeedWith $! responseServantErr e
+    go (NonRetriable e) = return $! NonRetriable e
     go (HandlerVal a)   = do
       e <- runExceptT a
       case e of
