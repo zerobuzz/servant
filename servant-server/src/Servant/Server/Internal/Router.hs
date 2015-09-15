@@ -73,7 +73,7 @@ runRouter (Choice r1 r2)       request respond =
   where
     highestPri (Retriable r1) (Retriable r2) =
       if errHTTPCode r1 == 404 && errHTTPCode r2 /= 404
-        then (Retriable r2)
-        else (Retriable r1)
+        then Retriable r2
+        else Retriable r1
     highestPri (Retriable _) y = y
     highestPri x _ = x
