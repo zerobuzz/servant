@@ -5,6 +5,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Servant.Server.ErrorSpec (spec) where
 
+import           Control.Monad.Trans.Except (throwE)
 import           Data.Aeson                 (encode)
 import qualified Data.ByteString.Lazy.Char8 as BCL
 import qualified Data.ByteString.Char8      as BC
@@ -54,7 +55,7 @@ errorOrderApi :: Proxy ErrorOrderApi
 errorOrderApi = Proxy
 
 errorOrderServer :: Server ErrorOrderApi
-errorOrderServer = \_ _ -> return 5
+errorOrderServer = \_ _ -> throwE err402
 
 errorOrderSpec :: Spec
 errorOrderSpec = describe "HTTP error order"
@@ -65,6 +66,7 @@ errorOrderSpec = describe "HTTP error order"
       badUrl          = "home/nonexistent"
       badBody         = "nonsense"
       goodContentType = (hContentType, "application/json")
+      goodAccept      = (hAccept, "application/json")
       goodMethod      = methodPost
       goodUrl         = "home/2"
       goodBody        = encode (5 :: Int)
@@ -81,13 +83,17 @@ errorOrderSpec = describe "HTTP error order"
     request goodMethod goodUrl [badContentType, badAccept] badBody
       `shouldRespondWith` 415
 
-  it "has 400 as its fourth highest priority error" $ do
+  it "has 406 as its fourth highest priority error" $ do
     request goodMethod goodUrl [goodContentType, badAccept] badBody
+      `shouldRespondWith` 406
+
+  it "has 400 as its fifth highest priority error" $ do
+    request goodMethod goodUrl [goodContentType, goodAccept] badBody
       `shouldRespondWith` 400
 
-  it "has 406 as its fifth highest priority error" $ do
-    request goodMethod goodUrl [goodContentType, badAccept] goodBody
-      `shouldRespondWith` 406
+  it "has handler-level errors as last priority" $ do
+    request goodMethod goodUrl [goodContentType, goodAccept] goodBody
+      `shouldRespondWith` 402
 
 type PrioErrorsApi = ReqBody '[JSON] Integer :> "foo" :> Get '[JSON] Integer
 
@@ -107,7 +113,7 @@ prioErrorsSpec = describe "PrioErrors" $ do
               `shouldRespondWith` resp
           where
             fulldescr = "returns " ++ show (matchStatus resp) ++ " on " ++ mdescr
-                     ++ " " ++ (BC.unpack path) ++ " (" ++ cdescr ++ ")"
+                     ++ " " ++ BC.unpack path ++ " (" ++ cdescr ++ ")"
 
         get' = ("GET", methodGet)
         put' = ("PUT", methodPut)
@@ -140,7 +146,7 @@ prioErrorsSpec = describe "PrioErrors" $ do
 -- * Error Retry {{{
 
 type ErrorRetryApi
-     = "a" :> ReqBody '[JSON] Int      :> Post '[JSON] Int                -- 0
+     = "a" :> ReqBody '[JSON] Int      :> Post '[JSON] Int                -- err402
   :<|> "a" :> ReqBody '[PlainText] Int :> Post '[JSON] Int                -- 1
   :<|> "a" :> ReqBody '[JSON] Int      :> Post '[PlainText] Int           -- 2
   :<|> "a" :> ReqBody '[JSON] String   :> Post '[JSON] Int                -- 3
@@ -154,7 +160,7 @@ errorRetryApi = Proxy
 
 errorRetryServer :: Server ErrorRetryApi
 errorRetryServer
-     = (\_ -> return 0)
+     = (\_ -> throwE err402)
   :<|> (\_ -> return 1)
   :<|> (\_ -> return 2)
   :<|> (\_ -> return 3)
@@ -192,6 +198,10 @@ errorRetrySpec = describe "Handler search"
   it "should not continue when Accepts don't match" $ do
     request methodPost "a" [jsonCT, plainAccept] jsonBody
      `shouldRespondWith` 406
+
+  it "should not continue when the handler returns an error" $ do
+    request methodPost "a" [jsonCT, jsonAccept] (encode (5 :: Int))
+      `shouldRespondWith` 402
 
 -- }}}
 ------------------------------------------------------------------------------
@@ -247,5 +257,3 @@ instance MimeUnrender PlainText Int where
 instance MimeRender PlainText Int where
     mimeRender _ = BCL.pack . show
 -- }}}
---
-
