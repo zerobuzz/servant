@@ -37,7 +37,7 @@ instance HasServer rest => HasServer (AuthProtected :> rest) where
           authGranted <- isGoodCookie v
           if authGranted
             then a
-            else return $! FailFatal err403 { errBody = "Invalid cookie" }
+            else return $ FailFatal err403 { errBody = "Invalid cookie" }
 
 type PrivateAPI = Get '[JSON] [PrivateData]
 

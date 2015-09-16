@@ -3,9 +3,6 @@ module Servant.Server.Internal.Router where
 
 import           Data.Map                                   (Map)
 import qualified Data.Map                                   as M
-#if !MIN_VERSION_base(4,8,0)
-import           Data.Monoid                                ((<>))
-#endif
 import           Data.Text                                  (Text)
 import           Network.Wai                                (Request, pathInfo)
 import           Servant.Server.Internal.ServantErr

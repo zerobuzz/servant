@@ -22,7 +22,7 @@ import           Servant
 --    1) Check whether one or more endpoints have the right path. Otherwise
 --    return 404.
 --    2) Check whether the one of those have the right method. Otherwise return
---    405. If so, pick the first. We've now commited to calling at most one
+--    405. If so, pick the first. We've now committed to calling at most one
 --    handler.
 --    3) Check whether the Content-Type is known. Otherwise return 415.
 --    4) Check whether that one deserializes the body. Otherwise return 400. If

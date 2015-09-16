@@ -73,12 +73,12 @@ runAction :: IO (RouteResult (ExceptT ServantErr IO a))
           -> IO r
 runAction action respond k = action >>= go >>= respond
   where
-    go (Fail  e)   = return $! Fail e
-    go (FailFatal e) = return $! FailFatal e
+    go (Fail  e)   = return $ Fail e
+    go (FailFatal e) = return $ FailFatal e
     go (Route a)   = do
       e <- runExceptT a
       case e of
-        Left err -> return . Route $! responseServantErr err
+        Left err -> return . Route $ responseServantErr err
         Right x  -> return $! k x
 
 feedTo :: IO (RouteResult (a -> b)) -> a -> IO (RouteResult b)
