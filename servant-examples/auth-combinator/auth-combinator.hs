@@ -32,7 +32,7 @@ instance HasServer rest => HasServer (AuthProtected :> rest) where
   route Proxy a = WithRequest $ \ request ->
     route (Proxy :: Proxy rest) $ do
       case lookup "Cookie" (requestHeaders request) of
-        Nothing -> return $! FailFatal err401 { errBody = "Missing auth header" }
+        Nothing -> return $ FailFatal err401 { errBody = "Missing auth header" }
         Just v  -> do
           authGranted <- isGoodCookie v
           if authGranted
