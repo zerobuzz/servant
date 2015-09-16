@@ -1,13 +1,14 @@
 {-# LANGUAGE CPP #-}
 module Servant.Server.Internal.Router where
 
+import           Data.List                                  (elemIndex)
 import           Data.Map                                   (Map)
 import qualified Data.Map                                   as M
 import           Data.Text                                  (Text)
 import           Network.Wai                                (Request, pathInfo)
-import           Servant.Server.Internal.ServantErr
 import           Servant.Server.Internal.PathInfo
 import           Servant.Server.Internal.RoutingApplication
+import           Servant.Server.Internal.ServantErr
 
 -- | Internal representation of a router.
 data Router =
@@ -69,13 +70,14 @@ runRouter (Choice r1 r2)       request respond =
     Fail _ -> runRouter r2 request $ \ mResponse2 ->
       respond (highestPri mResponse1 mResponse2)
     _      -> respond mResponse1
-  where
-    highestPri (Fail e1) (Fail e2) =
-      if worseHTTPCode (errHTTPCode e1) (errHTTPCode e2)
-        then Fail e2
-        else Fail e1
-    highestPri (Fail _) y = y
-    highestPri x _ = x
+   where
+     highestPri (Fail e1) (Fail e2) =
+       if worseHTTPCode (errHTTPCode e1) (errHTTPCode e2)
+         then Fail e2
+         else Fail e1
+     highestPri (Fail _) y = y
+     highestPri x _ = x
+
 
 -- Priority on HTTP codes.
 --

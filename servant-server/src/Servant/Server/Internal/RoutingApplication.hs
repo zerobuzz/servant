@@ -27,12 +27,12 @@ type RoutingApplication =
      Request -- ^ the request, the field 'pathInfo' may be modified by url routing
   -> (RouteResult Response -> IO ResponseReceived) -> IO ResponseReceived
 
--- | A wrapper around @'Either' 'RouteMismatch' a@.
+-- | The result of matching against a path in the route tree.
 data RouteResult a =
     Fail ServantErr           -- ^ Keep trying other paths. The @ServantErr@
                               -- should only be 404, 405 or 406.
-  | FailFatal ServantErr      -- ^ Don't try other paths.
-  | Route a
+  | FailFatal !ServantErr     -- ^ Don't try other paths.
+  | Route !a
   deriving (Eq, Show, Read, Functor)
 
 data ReqBodyState = Uncalled
@@ -65,9 +65,9 @@ toApplication ra request respond = do
   ra request{ requestBody = memoReqBody } routingRespond
  where
   routingRespond :: RouteResult Response -> IO ResponseReceived
-  routingRespond (Fail err)    = respond $! responseServantErr err
-  routingRespond (FailFatal err) = respond $! responseServantErr err
-  routingRespond (Route v)     = respond v
+  routingRespond (Fail err)      = respond $ responseServantErr err
+  routingRespond (FailFatal err) = respond $ responseServantErr err
+  routingRespond (Route v)       = respond v
 
 -- TODO: The above may not be quite right yet.
 --
