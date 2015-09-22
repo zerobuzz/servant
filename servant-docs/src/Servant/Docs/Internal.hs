@@ -838,8 +838,8 @@ instance
 #if MIN_VERSION_base(4,8,0)
          {-# OVERLAPPING #-}
 #endif
-        (ToSample a, IsNonEmpty cts, AllMimeRender cts a,
-         , AllHeaderSamples ls , GetHeaders (HList ls) )
+        ( ToSample a, IsNonEmpty cts, AllMimeRender cts a,
+          AllHeaderSamples ls , GetHeaders (HList ls) )
     => HasDocs (Put cts (Headers ls a)) where
   docsFor Proxy (endpoint, action) DocOptions{..} =
     single endpoint' action'
@@ -1001,4 +1001,3 @@ instance ToSample a => ToSample (Product a)
 instance ToSample a => ToSample (First a)
 instance ToSample a => ToSample (Last a)
 instance ToSample a => ToSample (Dual a)
-

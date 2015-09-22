@@ -7,11 +7,12 @@ module Servant.Server.ErrorSpec (spec) where
 
 import           Control.Monad.Trans.Except (throwE)
 import           Data.Aeson                 (encode)
-import qualified Data.ByteString.Lazy.Char8 as BCL
 import qualified Data.ByteString.Char8      as BC
+import qualified Data.ByteString.Lazy.Char8 as BCL
 import           Data.Proxy
 import           Network.HTTP.Types         (hAccept, hContentType, methodGet,
                                              methodPost, methodPut)
+import           Safe                       (readMay)
 import           Test.Hspec
 import           Test.Hspec.Wai
 
@@ -252,7 +253,7 @@ errorChoiceSpec = describe "Multiple handlers return errors"
 -- * Instances {{{
 
 instance MimeUnrender PlainText Int where
-    mimeUnrender _ = Right . read . BCL.unpack
+    mimeUnrender _ x = maybe (Left "no parse") Right (readMay $ BCL.unpack x)
 
 instance MimeRender PlainText Int where
     mimeRender _ = BCL.pack . show

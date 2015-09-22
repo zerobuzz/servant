@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP #-}
 module Servant.Server.Internal.Router where
 
-import           Data.List                                  (elemIndex)
 import           Data.Map                                   (Map)
 import qualified Data.Map                                   as M
 import           Data.Text                                  (Text)

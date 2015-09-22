@@ -56,7 +56,6 @@ import           Servant.API.ContentTypes    (AcceptHeader (..),
                                               canHandleAcceptH)
 import           Servant.API.ResponseHeaders (GetHeaders, Headers, getHeaders,
                                               getResponse)
-import           Servant.Common.Text         (FromText, fromText)
 
 import           Servant.Server.Internal.PathInfo
 import           Servant.Server.Internal.Router
