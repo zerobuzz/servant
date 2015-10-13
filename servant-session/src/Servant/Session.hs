@@ -9,19 +9,24 @@
 
 module Servant.Session (SSession) where
 
-import           Data.Proxy               (Proxy (Proxy))
+import           Data.Proxy              (Proxy (Proxy))
+import qualified Data.Vault.Lazy         as Vault
 import           Network.Wai
-import           Servant.API              ((:>))
+import           Network.Wai.Session
+import           Servant.API             ((:>))
 import           Servant.Server.Internal
-import qualified Data.Vault.Lazy as Vault
-import Network.Wai.Session
 
 
+-- | @SSession m k v@ represents a session storage with keys of type @k@,
+-- values of type @v@, and operating under the monad @m@.
+-- The underlying implementation uses the 'wai-session' package, and any
+-- backend compatible with that package should work here too.
 data SSession (m :: * -> *) (k :: *) (v :: *)
 
+-- | 'HasServer' instance for 'SSession'.
 instance ( HasServer sublayout
          ) => HasServer (SSession n k v :> sublayout) where
   type ServerT (SSession n k v :> sublayout) m
     = (Vault.Key (Session n k v) -> Maybe (Session n k v)) -> ServerT sublayout m
   route Proxy a = WithRequest $ \request -> route (Proxy :: Proxy sublayout)
-        $ passToServer a (\(key :: Vault.Key (Session n k v)) -> Vault.lookup key $ vault request)
+        $ passToServer a (\key -> Vault.lookup key $ vault request)

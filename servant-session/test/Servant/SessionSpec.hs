@@ -1,34 +1,28 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeOperators       #-}
-
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS -fno-warn-incomplete-patterns #-}
-{-# OPTIONS -fno-warn-orphans #-}
 
 module Servant.SessionSpec (spec) where
 
-import           Data.ByteString    (ByteString)
-import           Data.ByteString.Lazy    (fromStrict)
-import           Data.Time.Clock    ()
+import           Control.Monad              (replicateM_)
+import           Control.Monad.Trans.Except
+import qualified Data.Vault.Lazy            as Vault
 import           Network.HTTP.Types
 import           Network.Wai
-import           Network.Wai.Test   (simpleBody, simpleHeaders)
+import           Network.Wai.Session
+import           Network.Wai.Session.Map
+import           Network.Wai.Test           (simpleBody, simpleHeaders)
 import           Servant
-import           Test.Hspec         (Spec, context, describe, it, shouldBe,
-                                     shouldSatisfy)
+import           Test.Hspec                 (Spec, context, describe, it,
+                                             shouldBe, shouldSatisfy)
 import           Test.Hspec.Wai
-import qualified Data.Vault.Lazy as Vault
 import           Web.Cookie
-import qualified Data.Map as Map
-import Network.Wai.Session
-import Network.Wai.Session.Map
-import Data.IORef
-import Control.Monad.Trans.Except
 
-import Servant.Session
+import           Servant.Session
 
 spec :: Spec
 spec = describe "Servant.Session" . with server $ do
@@ -36,8 +30,9 @@ spec = describe "Servant.Session" . with server $ do
   context "the cookie is set" $ do
 
     it "has access to the cookie" $ do
+        replicateM_ 5 $ request methodGet "" [("Cookie", "test=const")] ""
         x <- request methodGet "" [("Cookie", "test=const")] ""
-        liftIO $ simpleBody x `shouldSatisfy` (== "1")
+        liftIO $ simpleBody x `shouldSatisfy` (== "\"4\"")
 
 
   context "no cookie is set" $ do
@@ -50,11 +45,10 @@ spec = describe "Servant.Session" . with server $ do
 
     it "adds SetCookie params" $ do
         resp <- request methodGet "" [] ""
-        liftIO $ print resp
         let Just c = parseSetCookie <$> lookup "Set-Cookie" (simpleHeaders resp)
         liftIO $ setCookieMaxAge c `shouldBe` setCookieMaxAge setCookieOpts
 
-type API = SSession IO Int String :> Get '[JSON] String
+type API = SSession IO Int Int :> Get '[JSON] String
 
 setCookieOpts :: SetCookie
 setCookieOpts = def { setCookieName = "test" , setCookieMaxAge = Just 300 }
@@ -62,21 +56,20 @@ setCookieOpts = def { setCookieName = "test" , setCookieMaxAge = Just 300 }
 sessionMiddleware :: SessionStore IO Int a -> Vault.Key (Session IO Int a) -> Middleware
 sessionMiddleware s = withSession s "test" setCookieOpts
 
-server ::  IO Application
+server :: IO Application
 server = do
     ref <- mapStore (return "const")
     key <- Vault.newKey
     return $ sessionMiddleware ref key
            $ serve (Proxy :: Proxy API) (handler key)
 
-handler :: Vault.Key (Session IO Int String)
-        -> (Vault.Key (Session IO Int String) -> Maybe (Session IO Int String))
+handler :: Vault.Key (Session IO Int Int)
+        -> (Vault.Key (Session IO Int Int) -> Maybe (Session IO Int Int))
         -> ExceptT ServantErr IO String
-handler key map = do
+handler key smap = do
     x <- liftIO $ lkup 1
-    liftIO $ print ("Cookie:\t" ++ show x)
     case x of
-        Nothing -> liftIO (ins 1 "a") >> return "Nothing"
-        Just y -> liftIO (ins 1 ('a':y)) >> return (show y)
+        Nothing -> liftIO (ins 1 0) >> return "Nothing"
+        Just y -> liftIO (ins 1 $ succ y) >> return (show y)
   where
-   Just (lkup, ins) = map key
+   Just (lkup, ins) = smap key
