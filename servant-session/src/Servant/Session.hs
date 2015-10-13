@@ -1,57 +1,66 @@
 {-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DeriveAnyClass      #-}
-{-# LANGUAGE DeriveDataTypeable  #-}
-{-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE FlexibleInstances   #-}
+{-# LANGUAGE DeriveGeneric   #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving   #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PolyKinds           #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
 
-module Servant.Session where
+module Servant.Session (Session, sessionMiddleware, Cookie(unCookie)) where
 
 import Data.ByteString (ByteString)
+import Data.ByteString.Char8 (pack)
 import Data.Typeable (Typeable)
 import Data.Proxy (Proxy(Proxy))
+import GHC.TypeLits
+import GHC.Generics (Generic)
+import Data.String (IsString)
 import Data.Maybe (fromJust)
--- import Data.Text.Encoding (decodeUtf8, encodeUtf8)
 import Network.Wai -- (requestHeaders)
-import Network.HTTP.Types (Header)
--- import Web.ClientSession
--- import Web.Cookie
+import Web.ClientSession
+import Web.Cookie
 import Servant.API ((:>))
 import Servant.Server.Internal
-import GHC.Generics
+import Data.UUID (toASCIIBytes)
+import System.Random
+import qualified Blaze.ByteString.Builder as Builder
 
 
-data Session
+data Session (sessKey :: Symbol)
+
 newtype Cookie = Cookie { unCookie :: ByteString }
-  deriving (Eq, Show, Ord, Typeable, Generic)
+  deriving (Eq, Show, IsString, Monoid, Read, Typeable, Generic)
 
-cookieToHeader :: Cookie -> Header
-cookieToHeader (Cookie t) = ("Set-Cookie", t)
-
-instance (HasServer sublayout) => HasServer (Session :> sublayout) where
-
-  type ServerT (Session :> sublayout) m = Cookie -> ServerT sublayout m
-
-  route Proxy a = WithRequest $ \request -> route (Proxy :: Proxy sublayout)
-        $ passToServer a (Cookie . fromJust $ lookup "Cookie" $ requestHeaders request)
-
-
-mkCookie :: IO Cookie
-mkCookie = return $ Cookie "bla"
+instance ( KnownSymbol sessKey, HasServer sublayout
+         ) => HasServer (Session sessKey :> sublayout) where
+  type ServerT (Session sessKey :> sublayout) m = Cookie -> ServerT sublayout m
+  route Proxy a = WithRequest
+        $ \request -> route (Proxy :: Proxy sublayout)
+        $ passToServer a (Cookie . fromJust $ go request)
+      where
+        key = pack $ symbolVal (Proxy :: Proxy sessKey)
+        go req = do
+            c <- lookup "Cookie" $ requestHeaders req
+            lookup key $ parseCookies c
 
 
-midd :: Middleware
-midd app req respond = case lookup "Cookie" (requestHeaders req) of
+mkCookie :: SetCookie -> IO SetCookie
+mkCookie sc = randomIO >>= \x -> return (sc { setCookieValue = toASCIIBytes x })
+
+
+sessionMiddleware :: Key -> SetCookie -> Middleware
+sessionMiddleware key setCookie app req respond
+  = case lookup "Cookie" (requestHeaders req) of
     Nothing -> do
-        newCookie <- mkCookie
-        app (req { requestHeaders = ("Cookie", unCookie newCookie):requestHeaders req}) (respond . injectCookie newCookie)
+        newCookie <- mkCookie setCookie
+        let renderedC = Builder.toByteString $ renderSetCookie newCookie
+        app (req { requestHeaders = ("Cookie", renderedC):requestHeaders req})
+            (respond . injectCookie renderedC)
     Just _  -> app req respond
 
 
-injectCookie :: Cookie -> Response -> Response
-injectCookie tok = mapResponseHeaders (cookieToHeader tok :)
+injectCookie :: ByteString -> Response -> Response
+injectCookie c = mapResponseHeaders (("Set-Cookie", c) :)
