@@ -1,32 +1,32 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE DeriveGeneric   #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving   #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PolyKinds           #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
 
 module Servant.Session (Session, sessionMiddleware, Cookie(unCookie)) where
 
-import Data.ByteString (ByteString)
-import Data.ByteString.Char8 (pack)
-import Data.Typeable (Typeable)
-import Data.Proxy (Proxy(Proxy))
-import GHC.TypeLits
-import GHC.Generics (Generic)
-import Data.String (IsString)
-import Data.Maybe (fromJust)
-import Network.Wai -- (requestHeaders)
-import Web.ClientSession
-import Web.Cookie
-import Servant.API ((:>))
-import Servant.Server.Internal
-import Data.UUID (toASCIIBytes)
-import System.Random
 import qualified Blaze.ByteString.Builder as Builder
+import           Data.ByteString          (ByteString)
+import           Data.ByteString.Char8    (pack)
+import           Data.Maybe               (fromJust)
+import           Data.Proxy               (Proxy (Proxy))
+import           Data.String              (IsString)
+import           Data.Typeable            (Typeable)
+import           Data.UUID                (toASCIIBytes)
+import           GHC.Generics             (Generic)
+import           GHC.TypeLits
+import           Network.Wai
+import           Servant.API              ((:>))
+import           Servant.Server.Internal
+import           System.Random
+import           Web.ClientSession
+import           Web.Cookie
 
 
 data Session (sessKey :: Symbol)
