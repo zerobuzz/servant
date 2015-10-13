@@ -14,7 +14,6 @@ module Servant.Session (Session, sessionMiddleware, Cookie(unCookie)) where
 import qualified Blaze.ByteString.Builder as Builder
 import           Data.ByteString          (ByteString)
 import           Data.ByteString.Char8    (pack)
-import           Data.Maybe               (fromJust)
 import           Data.Proxy               (Proxy (Proxy))
 import           Data.String              (IsString)
 import           Data.Typeable            (Typeable)
@@ -41,23 +40,26 @@ instance ( KnownSymbol sessKey, HasServer sublayout
     = (Key -> Maybe Cookie) -> ServerT sublayout m
   route Proxy a = WithRequest
         $ \request -> route (Proxy :: Proxy sublayout)
-        $ passToServer a (fromJust $ go request)
+        $ passToServer a (getCookie key request)
       where
         key = pack $ symbolVal (Proxy :: Proxy sessKey)
-        go req = do
-            c <- lookup "Cookie" $ requestHeaders req
-            v <- lookup key $ parseCookies c
-            return (\x -> Cookie <$> decrypt x v)
 
 sessionMiddleware :: Key -> SetCookie -> Middleware
 sessionMiddleware key setCookie app req respond
-  = case lookup "Cookie" (requestHeaders req) of
+  = case getCookie (setCookieName setCookie) req key of
     Nothing -> do
         newCookie <- mkCookie key setCookie
         let renderedC = Builder.toByteString $ renderSetCookie newCookie
         app (req { requestHeaders = ("Cookie", renderedC):requestHeaders req})
             (respond . injectCookie renderedC)
     Just _  -> app req respond
+
+
+getCookie :: ByteString -> Request -> Key -> Maybe Cookie
+getCookie sessKey req key = do
+    c <- lookup "Cookie" $ requestHeaders req
+    v <- lookup sessKey $ parseCookies c
+    Cookie <$> decrypt key v
 
 mkCookie :: Key -> SetCookie -> IO SetCookie
 mkCookie key sc = do

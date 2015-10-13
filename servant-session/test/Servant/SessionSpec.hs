@@ -28,26 +28,28 @@ import Servant.Session
 spec :: Spec
 spec = describe "Servant.Session" . with server $ do
 
-    context "the cookie is set" $ do
+  context "the cookie is set" $ do
 
-        it "returns nothing when the cookie cannot be decoded" $ do
-            request methodGet "" [("Cookie", "test=val")] "" `shouldRespondWith` "Nothing"
+    it "resets the cookie if the cookie cannot be decoded" $ do
+        x <- request methodGet "" [("Cookie", "test=val")] ""
+        liftIO $ simpleBody x `shouldSatisfy` (/= "Nothing")
 
-    context "no cookie is set" $ do
 
-        it "returns a fresh one" $ do
-            resp <- request methodGet "" [] ""
-            liftIO $ simpleBody resp `shouldSatisfy` (/= mempty)
+  context "no cookie is set" $ do
 
-        it "one will be in the Set-Cookie header of the response" $ do
-            resp <- request methodGet "" [] ""
-            let Just c = parseSetCookie <$> lookup "Set-Cookie" (simpleHeaders resp)
-            liftIO $ setCookieName c `shouldBe` setCookieName setCookieOpts
+    it "returns a fresh one" $ do
+        resp <- request methodGet "" [] ""
+        liftIO $ simpleBody resp `shouldSatisfy` (/= "Nothing")
 
-        it "adds SetCookie params" $ do
-            resp <- request methodGet "" [] ""
-            let Just c = parseSetCookie <$> lookup "Set-Cookie" (simpleHeaders resp)
-            liftIO $ setCookieMaxAge c `shouldBe` setCookieMaxAge setCookieOpts
+    it "one will be in the Set-Cookie header of the response" $ do
+        resp <- request methodGet "" [] ""
+        let Just c = parseSetCookie <$> lookup "Set-Cookie" (simpleHeaders resp)
+        liftIO $ setCookieName c `shouldBe` setCookieName setCookieOpts
+
+    it "adds SetCookie params" $ do
+        resp <- request methodGet "" [] ""
+        let Just c = parseSetCookie <$> lookup "Set-Cookie" (simpleHeaders resp)
+        liftIO $ setCookieMaxAge c `shouldBe` setCookieMaxAge setCookieOpts
 
 type API = Session "test" :> Get '[OctetStream] (Maybe ByteString)
 
