@@ -31,36 +31,39 @@ import           Web.Cookie
 
 data Session (sessKey :: Symbol)
 
+-- | A @UUID@ cookie.
 newtype Cookie = Cookie { unCookie :: ByteString }
   deriving (Eq, Show, IsString, Monoid, Read, Typeable, Generic)
 
 instance ( KnownSymbol sessKey, HasServer sublayout
          ) => HasServer (Session sessKey :> sublayout) where
-  type ServerT (Session sessKey :> sublayout) m = Cookie -> ServerT sublayout m
+  type ServerT (Session sessKey :> sublayout) m
+    = (Key -> Maybe Cookie) -> ServerT sublayout m
   route Proxy a = WithRequest
         $ \request -> route (Proxy :: Proxy sublayout)
-        $ passToServer a (Cookie . fromJust $ go request)
+        $ passToServer a (fromJust $ go request)
       where
         key = pack $ symbolVal (Proxy :: Proxy sessKey)
         go req = do
             c <- lookup "Cookie" $ requestHeaders req
-            lookup key $ parseCookies c
-
-
-mkCookie :: SetCookie -> IO SetCookie
-mkCookie sc = randomIO >>= \x -> return (sc { setCookieValue = toASCIIBytes x })
-
+            v <- lookup key $ parseCookies c
+            return (\x -> Cookie <$> decrypt x v)
 
 sessionMiddleware :: Key -> SetCookie -> Middleware
 sessionMiddleware key setCookie app req respond
   = case lookup "Cookie" (requestHeaders req) of
     Nothing -> do
-        newCookie <- mkCookie setCookie
+        newCookie <- mkCookie key setCookie
         let renderedC = Builder.toByteString $ renderSetCookie newCookie
         app (req { requestHeaders = ("Cookie", renderedC):requestHeaders req})
             (respond . injectCookie renderedC)
     Just _  -> app req respond
 
+mkCookie :: Key -> SetCookie -> IO SetCookie
+mkCookie key sc = do
+  x <- randomIO
+  c <- encryptIO key (toASCIIBytes x)
+  return (sc { setCookieValue = c })
 
 injectCookie :: ByteString -> Response -> Response
 injectCookie c = mapResponseHeaders (("Set-Cookie", c) :)
