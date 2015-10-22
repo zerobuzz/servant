@@ -4,25 +4,27 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeOperators         #-}
+
 {-# OPTIONS -fno-warn-incomplete-patterns #-}
 
 module Servant.SessionSpec (spec) where
 
 import           Control.Monad              (replicateM_)
-import           Control.Monad.Trans.Except
+import           Control.Monad.Trans.Except (ExceptT)
 import qualified Data.Vault.Lazy            as Vault
-import           Network.HTTP.Types
-import           Network.Wai
-import           Network.Wai.Session
-import           Network.Wai.Session.Map
+import           Network.HTTP.Types         (methodGet)
+import           Network.Wai                (Middleware, Application)
+import           Network.Wai.Session        (SessionStore, Session, withSession)
+import           Network.Wai.Session.Map    (mapStore)
 import           Network.Wai.Test           (simpleBody, simpleHeaders)
-import           Servant
-import           Test.Hspec                 (Spec, context, describe, it,
-                                             shouldBe, shouldSatisfy)
-import           Test.Hspec.Wai
-import           Web.Cookie
+import           Servant                    (Proxy(Proxy), ServantErr, Get, JSON, (:>), serve)
+import           Test.Hspec                 (Spec, context, describe, it, shouldBe, shouldSatisfy)
+import           Test.Hspec.Wai             (with, request, liftIO)
+import           Web.Cookie                 (SetCookie, def, parseSetCookie,
+                                             setCookieName, setCookieValue, setCookieMaxAge)
 
 import           Servant.Session
+
 
 spec :: Spec
 spec = describe "Servant.Session" . with server $ do
