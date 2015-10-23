@@ -31,7 +31,7 @@ spec = describe "Servant.Session" . with server $ do
 
   context "the cookie is set" $ do
 
-    it "has access to the cookie" $ do
+    it "has read and write access to the cookie" $ do
         replicateM_ 5 $ request methodGet "" [("Cookie", "test=const")] ""
         x <- request methodGet "" [("Cookie", "test=const")] ""
         liftIO $ simpleBody x `shouldSatisfy` (== "\"4\"")
@@ -50,10 +50,11 @@ spec = describe "Servant.Session" . with server $ do
         let Just c = parseSetCookie <$> lookup "Set-Cookie" (simpleHeaders resp)
         liftIO $ setCookieMaxAge c `shouldBe` setCookieMaxAge setCookieOpts
 
+
 type API = SSession IO Int Int :> Get '[JSON] String
 
 setCookieOpts :: SetCookie
-setCookieOpts = def { setCookieName = "test" , setCookieMaxAge = Just 300 }
+setCookieOpts = def { setCookieName = "test", setCookieMaxAge = Just 300 }
 
 sessionMiddleware :: SessionStore IO Int a -> Vault.Key (Session IO Int a) -> Middleware
 sessionMiddleware s = withSession s "test" setCookieOpts
@@ -74,4 +75,4 @@ handler key smap = do
         Nothing -> liftIO (ins 1 0) >> return "Nothing"
         Just y -> liftIO (ins 1 $ succ y) >> return (show y)
   where
-   Just (lkup, ins) = smap key
+    Just (lkup, ins) = smap key
