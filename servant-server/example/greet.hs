@@ -17,7 +17,8 @@ import           Network.Wai.Handler.Warp
 
 import           Servant
 
-import Data.String.Conversions
+import           Data.String.Conversions
+                 (cs)
 
 -- * Example
 
