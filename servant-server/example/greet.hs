@@ -17,7 +17,15 @@ import           Network.Wai.Handler.Warp
 
 import           Servant
 
+import Data.String.Conversions
+
 -- * Example
+
+customFormatter :: BodyParseErrorFormatter
+customFormatter = BodyParseErrorFormatter $ \tr err -> err400
+  { errBody = cs $ "{\"combinator\": \"" <> show tr <> "\", \"error\": \"" <> err <> "\"}"
+  , errHeaders = [("Content-Type", "application/json")]
+  }
 
 -- | A greet message data type
 newtype Greet = Greet { _msg :: Text }
@@ -61,7 +69,7 @@ server = helloH :<|> postGreetH :<|> deleteGreetH
 -- Turn the server into a WAI app. 'serve' is provided by servant,
 -- more precisely by the Servant.Server module.
 test :: Application
-test = serve testApi server
+test = serveWithContext testApi (customFormatter :. defaultErrorFormatters) server
 
 -- Run the server.
 --
