@@ -115,6 +115,7 @@ executable greet
     , wai
     , text
     , string-conversions
+    , aeson
 
   build-depends:
       aeson               >= 1.4.1.0  && < 1.6

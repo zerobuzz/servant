@@ -17,16 +17,23 @@ import           Network.Wai.Handler.Warp
 
 import           Servant
 
+import           Data.Aeson
+                 (object)
 import           Data.String.Conversions
                  (cs)
+import           Servant.API.ContentTypes
 
 -- * Example
 
 customFormatter :: BodyParseErrorFormatter
-customFormatter = BodyParseErrorFormatter $ \tr err -> err400
-  { errBody = cs $ "{\"combinator\": \"" <> show tr <> "\", \"error\": \"" <> err <> "\"}"
-  , errHeaders = [("Content-Type", "application/json")]
-  }
+customFormatter = BodyParseErrorFormatter $ \tr accH err ->
+  let value = object ["combinator" .= show tr, "error" .= err] in
+  case handleAcceptH (Proxy :: Proxy '[JSON]) accH value of
+    Nothing -> err400 { errBody = cs err }
+    Just (ctypeH, body) -> err400
+      { errBody = body
+      , errHeaders = [("Content-Type", cs ctypeH)]
+      }
 
 -- | A greet message data type
 newtype Greet = Greet { _msg :: Text }
