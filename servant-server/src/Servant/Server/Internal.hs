@@ -185,11 +185,13 @@ instance (KnownSymbol capture, FromHttpApiData a
     CaptureRouter $
         route (Proxy :: Proxy api)
               context
-              (addCapture d $ \ txt -> case ( sbool :: SBool (FoldLenient mods)
-                                            , parseUrlPiece txt :: Either T.Text a) of
-                 (SFalse, Left e) -> delayedFail $ urlParseErrorFormatter rep $ cs e
-                 (SFalse, Right v) -> return v
-                 (STrue, piece) -> return $ (either (Left . cs) Right) piece
+              (addCapture d $ \ txt -> withRequest $ \ request ->
+                let accH = getAcceptHeader request in
+                case ( sbool :: SBool (FoldLenient mods)
+                     , parseUrlPiece txt :: Either T.Text a) of
+                  (SFalse, Left e) -> delayedFail $ urlParseErrorFormatter rep accH $ cs e
+                  (SFalse, Right v) -> return v
+                  (STrue, piece) -> return $ (either (Left . cs) Right) piece
               )
     where
       rep = typeRep (Proxy :: Proxy Capture')
@@ -227,9 +229,11 @@ instance (KnownSymbol capture, FromHttpApiData a
     CaptureAllRouter $
         route (Proxy :: Proxy api)
               context
-              (addCapture d $ \ txts -> case parseUrlPieces txts of
-                 Left e  -> delayedFail $ urlParseErrorFormatter rep $ cs e
-                 Right v -> return v
+              (addCapture d $ \ txts -> withRequest $ \ request ->
+                let accH = getAcceptHeader request in
+                case parseUrlPieces txts of
+                   Left e  -> delayedFail $ urlParseErrorFormatter rep accH $ cs e
+                   Right v -> return v
               )
     where
       rep = typeRep (Proxy :: Proxy CaptureAll)
@@ -253,10 +257,10 @@ methodCheck method request
 -- body check is no longer an option. However, we now run the accept
 -- check before the body check and can therefore afford to make it
 -- recoverable.
-acceptCheck :: (AllMime list) => Proxy list -> B.ByteString -> DelayedIO ()
+acceptCheck :: (AllMime list) => Proxy list -> AcceptHeader -> DelayedIO ()
 acceptCheck proxy accH
-  | canHandleAcceptH proxy (AcceptHeader accH) = return ()
-  | otherwise                                  = delayedFail err406
+  | canHandleAcceptH proxy accH = return ()
+  | otherwise                   = delayedFail err406
 
 methodRouter :: (AllCTRender ctypes a)
              => (b -> ([(HeaderName, B.ByteString)], a))
@@ -266,12 +270,12 @@ methodRouter :: (AllCTRender ctypes a)
 methodRouter splitHeaders method proxy status action = leafRouter route'
   where
     route' env request respond =
-          let accH = fromMaybe ct_wildcard $ lookup hAccept $ requestHeaders request
+          let accH = getAcceptHeader request
           in runAction (action `addMethodCheck` methodCheck method request
                                `addAcceptCheck` acceptCheck proxy accH
                        ) env request respond $ \ output -> do
                let (headers, b) = splitHeaders output
-               case handleAcceptH proxy (AcceptHeader accH) b of
+               case handleAcceptH proxy accH b of
                  Nothing -> FailFatal err406 -- this should not happen (checked before), so we make it fatal if it does
                  Just (contentT, body) ->
                       let bdy = if allowedMethodHead method request then "" else body
@@ -356,7 +360,7 @@ streamRouter :: forall ctype a c chunk env framing. (MimeRender ctype chunk, Fra
              -> Delayed env (Handler c)
              -> Router env
 streamRouter splitHeaders method status framingproxy ctypeproxy action = leafRouter $ \env request respond ->
-          let accH    = fromMaybe ct_wildcard $ lookup hAccept $ requestHeaders request
+          let AcceptHeader accH = getAcceptHeader request
               cmediatype = NHM.matchAccept [contentType ctypeproxy] accH
               accCheck = when (isNothing cmediatype) $ delayedFail err406
               contentHeader = (hContentType, NHM.renderHeader . maybeToList $ cmediatype)
@@ -423,13 +427,15 @@ instance
       headerCheck req =
           unfoldRequestArgument (Proxy :: Proxy mods) errReq errSt mev
         where
+          accH = getAcceptHeader req
+
           mev :: Maybe (Either T.Text a)
           mev = fmap parseHeader $ lookup headerName (requestHeaders req)
 
-          errReq = delayedFailFatal $ headerParseErrorFormatter rep
+          errReq = delayedFailFatal $ headerParseErrorFormatter rep accH
             $ "Header " <> headerName <> " is required"
 
-          errSt e = delayedFailFatal $ headerParseErrorFormatter rep
+          errSt e = delayedFailFatal $ headerParseErrorFormatter rep accH
             $ cs $ "Error parsing header "
                     <> headerName
                     <> " failed: " <> e
@@ -478,13 +484,15 @@ instance
         parseParam req =
             unfoldRequestArgument (Proxy :: Proxy mods) errReq errSt mev
           where
+            accH = getAcceptHeader req
+
             mev :: Maybe (Either T.Text a)
             mev = fmap parseQueryParam $ join $ lookup paramname $ querytext req
 
-            errReq = delayedFailFatal $ urlParseErrorFormatter rep
+            errReq = delayedFailFatal $ urlParseErrorFormatter rep accH
               $ cs $ "Query parameter " <> paramname <> " is required"
 
-            errSt e = delayedFailFatal $ urlParseErrorFormatter rep
+            errSt e = delayedFailFatal $ urlParseErrorFormatter rep accH
               $ cs $ "Error parsing query parameter "
                       <> paramname <> " failed: " <> e
 
@@ -531,11 +539,12 @@ instance (KnownSymbol sym, FromHttpApiData a, HasServer api context
       paramsCheck req =
           case partitionEithers $ fmap parseQueryParam params of
               ([], parsed) -> return parsed
-              (errs, _)    -> delayedFailFatal $ urlParseErrorFormatter rep
+              (errs, _)    -> delayedFailFatal $ urlParseErrorFormatter rep accH
                   $ cs $ "Error parsing query parameter(s) "
                          <> paramname <> " failed: "
                          <> T.intercalate ", " errs
         where
+          accH = getAcceptHeader req
           params :: [T.Text]
           params = mapMaybe snd
                  . filter (looksLikeParam . fst)
@@ -653,11 +662,12 @@ instance ( AllCTUnrender list a, HasServer api context, SBoolI (FoldLenient mods
 
       -- Body check, we get a body parsing functions as the first argument.
       bodyCheck f = withRequest $ \ request -> do
+        let accH = getAcceptHeader request
         mrqbody <- f <$> liftIO (lazyRequestBody request)
         case sbool :: SBool (FoldLenient mods) of
           STrue -> return mrqbody
           SFalse -> case mrqbody of
-            Left e  -> delayedFailFatal $ bodyParserErrorFormatter rep e
+            Left e  -> delayedFailFatal $ bodyParserErrorFormatter rep accH e
             Right v -> return v
 
 instance
@@ -784,6 +794,9 @@ instance ( KnownSymbol realm
 
 ct_wildcard :: B.ByteString
 ct_wildcard = "*" <> "/" <> "*" -- Because CPP
+
+getAcceptHeader :: Request -> AcceptHeader
+getAcceptHeader = AcceptHeader . fromMaybe ct_wildcard . lookup hAccept . requestHeaders
 
 -- * General Authentication
 

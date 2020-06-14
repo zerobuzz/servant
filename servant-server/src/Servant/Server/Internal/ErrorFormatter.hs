@@ -8,6 +8,7 @@ import           Data.String.Conversions
                  (cs)
 import           Data.Typeable
 
+import           Servant.API.ContentTypes
 import           Servant.Server.Internal.Context
 import           Servant.Server.Internal.ServerError
 
@@ -30,7 +31,7 @@ defaultErrorFormatters =
 -- A 'TypeRep' argument described the concrete combinator that raised
 -- the error, allowing formatter to customize the message for different
 -- combinators.
-type ErrorFormatter = TypeRep -> String -> ServerError
+type ErrorFormatter = TypeRep -> AcceptHeader -> String -> ServerError
 
 -- | Formatter for errors that occur while parsing request body.
 newtype BodyParseErrorFormatter = BodyParseErrorFormatter
@@ -60,4 +61,4 @@ defaultHeaderParseErrorFormatter = HeaderParseErrorFormatter defaultErrorFormatt
 -- Internal
 
 defaultErrorFormatter :: ErrorFormatter
-defaultErrorFormatter _ e = err400 { errBody = cs e }
+defaultErrorFormatter _ _ e = err400 { errBody = cs e }
