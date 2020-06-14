@@ -24,9 +24,10 @@ module Servant.Server.Internal
   , module Servant.Server.Internal.Context
   , module Servant.Server.Internal.Delayed
   , module Servant.Server.Internal.DelayedIO
+  , module Servant.Server.Internal.ErrorFormatter
   , module Servant.Server.Internal.Handler
-  , module Servant.Server.Internal.Router
   , module Servant.Server.Internal.RouteResult
+  , module Servant.Server.Internal.Router
   , module Servant.Server.Internal.RoutingApplication
   , module Servant.Server.Internal.ServerError
   ) where
@@ -95,6 +96,7 @@ import           Servant.Server.Internal.BasicAuth
 import           Servant.Server.Internal.Context
 import           Servant.Server.Internal.Delayed
 import           Servant.Server.Internal.DelayedIO
+import           Servant.Server.Internal.ErrorFormatter
 import           Servant.Server.Internal.Handler
 import           Servant.Server.Internal.Router
 import           Servant.Server.Internal.RouteResult
@@ -168,7 +170,10 @@ instance (HasServer a context, HasServer b context) => HasServer (a :<|> b) cont
 -- > server = getBook
 -- >   where getBook :: Text -> Handler Book
 -- >         getBook isbn = ...
-instance (KnownSymbol capture, FromHttpApiData a, HasServer api context, SBoolI (FoldLenient mods))
+instance (KnownSymbol capture, FromHttpApiData a
+         , HasServer api context, SBoolI (FoldLenient mods)
+         , HasContextEntry context URLParseErrorFormatter
+         )
       => HasServer (Capture' mods capture a :> api) context where
 
   type ServerT (Capture' mods capture a :> api) m =
@@ -182,10 +187,13 @@ instance (KnownSymbol capture, FromHttpApiData a, HasServer api context, SBoolI 
               context
               (addCapture d $ \ txt -> case ( sbool :: SBool (FoldLenient mods)
                                             , parseUrlPiece txt :: Either T.Text a) of
-                 (SFalse, Left e) -> delayedFail err400 { errBody = cs e }
+                 (SFalse, Left e) -> delayedFail $ urlParseErrorFormatter rep $ cs e
                  (SFalse, Right v) -> return v
                  (STrue, piece) -> return $ (either (Left . cs) Right) piece
               )
+    where
+      rep = typeRep (Proxy :: Proxy Capture')
+      urlParseErrorFormatter = getUrlParseErrorFormatter $ getContextEntry context
 
 -- | If you use 'CaptureAll' in one of the endpoints for your API,
 -- this automatically requires your server-side handler to be a
@@ -204,7 +212,10 @@ instance (KnownSymbol capture, FromHttpApiData a, HasServer api context, SBoolI 
 -- > server = getSourceFile
 -- >   where getSourceFile :: [Text] -> Handler Book
 -- >         getSourceFile pathSegments = ...
-instance (KnownSymbol capture, FromHttpApiData a, HasServer api context)
+instance (KnownSymbol capture, FromHttpApiData a
+         , HasServer api context
+         , HasContextEntry context URLParseErrorFormatter
+         )
       => HasServer (CaptureAll capture a :> api) context where
 
   type ServerT (CaptureAll capture a :> api) m =
@@ -217,10 +228,12 @@ instance (KnownSymbol capture, FromHttpApiData a, HasServer api context)
         route (Proxy :: Proxy api)
               context
               (addCapture d $ \ txts -> case parseUrlPieces txts of
-                 Left _  -> delayedFail err400
+                 Left e  -> delayedFail $ urlParseErrorFormatter rep $ cs e
                  Right v -> return v
               )
-
+    where
+      rep = typeRep (Proxy :: Proxy CaptureAll)
+      urlParseErrorFormatter = getUrlParseErrorFormatter $ getContextEntry context
 
 allowedMethodHead :: Method -> Request -> Bool
 allowedMethodHead method request = method == methodGet && requestMethod request == methodHead
@@ -388,6 +401,7 @@ streamRouter splitHeaders method status framingproxy ctypeproxy action = leafRou
 instance
   (KnownSymbol sym, FromHttpApiData a, HasServer api context
   , SBoolI (FoldRequired mods), SBoolI (FoldLenient mods)
+  , HasContextEntry context HeaderParseErrorFormatter
   )
   => HasServer (Header' mods sym a :> api) context where
 ------
@@ -399,6 +413,9 @@ instance
   route Proxy context subserver = route (Proxy :: Proxy api) context $
       subserver `addHeaderCheck` withRequest headerCheck
     where
+      rep = typeRep (Proxy :: Proxy Header')
+      headerParseErrorFormatter = getHeaderParseErrorFormatter $ getContextEntry context
+
       headerName :: IsString n => n
       headerName = fromString $ symbolVal (Proxy :: Proxy sym)
 
@@ -409,15 +426,13 @@ instance
           mev :: Maybe (Either T.Text a)
           mev = fmap parseHeader $ lookup headerName (requestHeaders req)
 
-          errReq = delayedFailFatal err400
-            { errBody = "Header " <> headerName <> " is required"
-            }
+          errReq = delayedFailFatal $ headerParseErrorFormatter rep
+            $ "Header " <> headerName <> " is required"
 
-          errSt e = delayedFailFatal err400
-              { errBody = cs $ "Error parsing header "
-                               <> headerName
-                               <> " failed: " <> e
-              }
+          errSt e = delayedFailFatal $ headerParseErrorFormatter rep
+            $ cs $ "Error parsing header "
+                    <> headerName
+                    <> " failed: " <> e
 
 -- | If you use @'QueryParam' "author" Text@ in one of the endpoints for your API,
 -- this automatically requires your server-side handler to be a function
@@ -443,6 +458,7 @@ instance
 instance
   ( KnownSymbol sym, FromHttpApiData a, HasServer api context
   , SBoolI (FoldRequired mods), SBoolI (FoldLenient mods)
+  , HasContextEntry context URLParseErrorFormatter
   )
   => HasServer (QueryParam' mods sym a :> api) context where
 ------
@@ -455,6 +471,9 @@ instance
     let querytext = queryToQueryText . queryString
         paramname = cs $ symbolVal (Proxy :: Proxy sym)
 
+        rep = typeRep (Proxy :: Proxy QueryParam')
+        urlParseErrorFormatter = getUrlParseErrorFormatter $ getContextEntry context
+
         parseParam :: Request -> DelayedIO (RequestArgument mods a)
         parseParam req =
             unfoldRequestArgument (Proxy :: Proxy mods) errReq errSt mev
@@ -462,14 +481,12 @@ instance
             mev :: Maybe (Either T.Text a)
             mev = fmap parseQueryParam $ join $ lookup paramname $ querytext req
 
-            errReq = delayedFailFatal err400
-              { errBody = cs $ "Query parameter " <> paramname <> " is required"
-              }
+            errReq = delayedFailFatal $ urlParseErrorFormatter rep
+              $ cs $ "Query parameter " <> paramname <> " is required"
 
-            errSt e = delayedFailFatal err400
-              { errBody = cs $ "Error parsing query parameter "
-                               <> paramname <> " failed: " <> e
-              }
+            errSt e = delayedFailFatal $ urlParseErrorFormatter rep
+              $ cs $ "Error parsing query parameter "
+                      <> paramname <> " failed: " <> e
 
         delayed = addParameterCheck subserver . withRequest $ \req ->
                     parseParam req
@@ -495,7 +512,8 @@ instance
 -- > server = getBooksBy
 -- >   where getBooksBy :: [Text] -> Handler [Book]
 -- >         getBooksBy authors = ...return all books by these authors...
-instance (KnownSymbol sym, FromHttpApiData a, HasServer api context)
+instance (KnownSymbol sym, FromHttpApiData a, HasServer api context
+         , HasContextEntry context URLParseErrorFormatter)
       => HasServer (QueryParams sym a :> api) context where
 
   type ServerT (QueryParams sym a :> api) m =
@@ -506,21 +524,23 @@ instance (KnownSymbol sym, FromHttpApiData a, HasServer api context)
   route Proxy context subserver = route (Proxy :: Proxy api) context $
       subserver `addParameterCheck` withRequest paramsCheck
     where
+      rep = typeRep (Proxy :: Proxy QueryParams)
+      urlParseErrorFormatter = getUrlParseErrorFormatter $ getContextEntry context
+
       paramname = cs $ symbolVal (Proxy :: Proxy sym)
       paramsCheck req =
           case partitionEithers $ fmap parseQueryParam params of
               ([], parsed) -> return parsed
-              (errs, _)    -> delayedFailFatal err400
-                  { errBody = cs $ "Error parsing query parameter(s) "
-                                   <> paramname <> " failed: "
-                                   <> T.intercalate ", " errs
-                  }
+              (errs, _)    -> delayedFailFatal $ urlParseErrorFormatter rep
+                  $ cs $ "Error parsing query parameter(s) "
+                         <> paramname <> " failed: "
+                         <> T.intercalate ", " errs
         where
           params :: [T.Text]
           params = mapMaybe snd
                  . filter (looksLikeParam . fst)
-                 . queryToQueryText 
-                 . queryString                 
+                 . queryToQueryText
+                 . queryString
                  $ req
 
           looksLikeParam name = name == paramname || name == (paramname <> "[]")
@@ -588,7 +608,7 @@ instance HasServer Raw context where
 -- The @Content-Type@ header is inspected, and the list provided is used to
 -- attempt deserialization. If the request does not have a @Content-Type@
 -- header, it is treated as @application/octet-stream@ (as specified in
--- <http://tools.ietf.org/html/rfc7231#section-3.1.1.5 RFC7231>.
+-- [RFC 7231 section 3.1.1.5](http://tools.ietf.org/html/rfc7231#section-3.1.1.5 RFC7231).
 -- This lets servant worry about extracting it from the request and turning
 -- it into a value of the type you specify.
 --
@@ -604,6 +624,7 @@ instance HasServer Raw context where
 -- >   where postBook :: Book -> Handler Book
 -- >         postBook book = ...insert into your db...
 instance ( AllCTUnrender list a, HasServer api context, SBoolI (FoldLenient mods)
+         , HasContextEntry context BodyParseErrorFormatter
          ) => HasServer (ReqBody' mods list a :> api) context where
 
   type ServerT (ReqBody' mods list a :> api) m =
@@ -615,6 +636,9 @@ instance ( AllCTUnrender list a, HasServer api context, SBoolI (FoldLenient mods
       = route (Proxy :: Proxy api) context $
           addBodyCheck subserver ctCheck bodyCheck
     where
+      rep = typeRep (Proxy :: Proxy ReqBody')
+      bodyParserErrorFormatter = getBodyParseErrorFormatter $ getContextEntry context
+
       -- Content-Type check, we only lookup we can try to parse the request body
       ctCheck = withRequest $ \ request -> do
         -- See HTTP RFC 2616, section 7.2.1
@@ -633,7 +657,7 @@ instance ( AllCTUnrender list a, HasServer api context, SBoolI (FoldLenient mods
         case sbool :: SBool (FoldLenient mods) of
           STrue -> return mrqbody
           SFalse -> case mrqbody of
-            Left e  -> delayedFailFatal err400 { errBody = cs e }
+            Left e  -> delayedFailFatal $ bodyParserErrorFormatter rep e
             Right v -> return v
 
 instance
