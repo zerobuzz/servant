@@ -186,10 +186,9 @@ instance (KnownSymbol capture, FromHttpApiData a
         route (Proxy :: Proxy api)
               context
               (addCapture d $ \ txt -> withRequest $ \ request ->
-                let accH = getAcceptHeader request in
                 case ( sbool :: SBool (FoldLenient mods)
                      , parseUrlPiece txt :: Either T.Text a) of
-                  (SFalse, Left e) -> delayedFail $ urlParseErrorFormatter rep accH $ cs e
+                  (SFalse, Left e) -> delayedFail $ urlParseErrorFormatter rep request $ cs e
                   (SFalse, Right v) -> return v
                   (STrue, piece) -> return $ (either (Left . cs) Right) piece
               )
@@ -230,9 +229,8 @@ instance (KnownSymbol capture, FromHttpApiData a
         route (Proxy :: Proxy api)
               context
               (addCapture d $ \ txts -> withRequest $ \ request ->
-                let accH = getAcceptHeader request in
                 case parseUrlPieces txts of
-                   Left e  -> delayedFail $ urlParseErrorFormatter rep accH $ cs e
+                   Left e  -> delayedFail $ urlParseErrorFormatter rep request $ cs e
                    Right v -> return v
               )
     where
@@ -427,15 +425,13 @@ instance
       headerCheck req =
           unfoldRequestArgument (Proxy :: Proxy mods) errReq errSt mev
         where
-          accH = getAcceptHeader req
-
           mev :: Maybe (Either T.Text a)
           mev = fmap parseHeader $ lookup headerName (requestHeaders req)
 
-          errReq = delayedFailFatal $ headerParseErrorFormatter rep accH
+          errReq = delayedFailFatal $ headerParseErrorFormatter rep req
             $ "Header " <> headerName <> " is required"
 
-          errSt e = delayedFailFatal $ headerParseErrorFormatter rep accH
+          errSt e = delayedFailFatal $ headerParseErrorFormatter rep req
             $ cs $ "Error parsing header "
                     <> headerName
                     <> " failed: " <> e
@@ -484,15 +480,13 @@ instance
         parseParam req =
             unfoldRequestArgument (Proxy :: Proxy mods) errReq errSt mev
           where
-            accH = getAcceptHeader req
-
             mev :: Maybe (Either T.Text a)
             mev = fmap parseQueryParam $ join $ lookup paramname $ querytext req
 
-            errReq = delayedFailFatal $ urlParseErrorFormatter rep accH
+            errReq = delayedFailFatal $ urlParseErrorFormatter rep req
               $ cs $ "Query parameter " <> paramname <> " is required"
 
-            errSt e = delayedFailFatal $ urlParseErrorFormatter rep accH
+            errSt e = delayedFailFatal $ urlParseErrorFormatter rep req
               $ cs $ "Error parsing query parameter "
                       <> paramname <> " failed: " <> e
 
@@ -539,12 +533,11 @@ instance (KnownSymbol sym, FromHttpApiData a, HasServer api context
       paramsCheck req =
           case partitionEithers $ fmap parseQueryParam params of
               ([], parsed) -> return parsed
-              (errs, _)    -> delayedFailFatal $ urlParseErrorFormatter rep accH
+              (errs, _)    -> delayedFailFatal $ urlParseErrorFormatter rep req
                   $ cs $ "Error parsing query parameter(s) "
                          <> paramname <> " failed: "
                          <> T.intercalate ", " errs
         where
-          accH = getAcceptHeader req
           params :: [T.Text]
           params = mapMaybe snd
                  . filter (looksLikeParam . fst)
@@ -662,12 +655,11 @@ instance ( AllCTUnrender list a, HasServer api context, SBoolI (FoldLenient mods
 
       -- Body check, we get a body parsing functions as the first argument.
       bodyCheck f = withRequest $ \ request -> do
-        let accH = getAcceptHeader request
         mrqbody <- f <$> liftIO (lazyRequestBody request)
         case sbool :: SBool (FoldLenient mods) of
           STrue -> return mrqbody
           SFalse -> case mrqbody of
-            Left e  -> delayedFailFatal $ bodyParserErrorFormatter rep accH e
+            Left e  -> delayedFailFatal $ bodyParserErrorFormatter rep request e
             Right v -> return v
 
 instance

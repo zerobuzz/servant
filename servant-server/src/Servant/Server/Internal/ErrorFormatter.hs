@@ -7,8 +7,11 @@ module Servant.Server.Internal.ErrorFormatter
 import           Data.String.Conversions
                  (cs)
 import           Data.Typeable
+import           Network.Wai.Internal
+                 (Request)
 
-import           Servant.API.ContentTypes
+import           Servant.API
+                 (Capture, ReqBody)
 import           Servant.Server.Internal.Context
 import           Servant.Server.Internal.ServerError
 
@@ -26,12 +29,15 @@ defaultErrorFormatters =
   :. EmptyContext
 
 -- | A custom formatter for errors produced by parsing combinators like
--- 'Servant.API.ReqBody' or 'Servant.API.Capture'.
+-- 'ReqBody' or 'Capture'.
 --
 -- A 'TypeRep' argument described the concrete combinator that raised
 -- the error, allowing formatter to customize the message for different
 -- combinators.
-type ErrorFormatter = TypeRep -> AcceptHeader -> String -> ServerError
+--
+-- A full 'Request' is also passed so that the formatter can react to @Accept@ header,
+-- for example.
+type ErrorFormatter = TypeRep -> Request -> String -> ServerError
 
 -- | Formatter for errors that occur while parsing request body.
 newtype BodyParseErrorFormatter = BodyParseErrorFormatter
@@ -62,3 +68,10 @@ defaultHeaderParseErrorFormatter = HeaderParseErrorFormatter defaultErrorFormatt
 
 defaultErrorFormatter :: ErrorFormatter
 defaultErrorFormatter _ _ e = err400 { errBody = cs e }
+
+-- These definitions suppress "unused import" warning.
+-- The imorts are needed for Haddock to correctly link to them.
+_RB :: Proxy ReqBody
+_RB = undefined
+_C :: Proxy Capture
+_C = undefined
