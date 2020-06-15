@@ -45,7 +45,7 @@ newtype BodyParseErrorFormatter = BodyParseErrorFormatter
   }
 
 defaulyBodyParseErrorFormatter :: BodyParseErrorFormatter
-defaulyBodyParseErrorFormatter = BodyParseErrorFormatter defaultErrorFormatter
+defaulyBodyParseErrorFormatter = BodyParseErrorFormatter err400Formatter
 
 -- | Formatter for errors that occur while parsing URL parts, like 'Servant.API.Capture' or
 -- 'Servant.API.QueryParam'.
@@ -54,7 +54,7 @@ newtype URLParseErrorFormatter = URLParseErrorFormatter
   }
 
 defaultURLParseErrorFormatter :: URLParseErrorFormatter
-defaultURLParseErrorFormatter = URLParseErrorFormatter defaultErrorFormatter
+defaultURLParseErrorFormatter = URLParseErrorFormatter err400Formatter
 
 -- | Formatter for errors that occur while parsing HTTP headers.
 newtype HeaderParseErrorFormatter = HeaderParseErrorFormatter
@@ -62,12 +62,12 @@ newtype HeaderParseErrorFormatter = HeaderParseErrorFormatter
   }
 
 defaultHeaderParseErrorFormatter :: HeaderParseErrorFormatter
-defaultHeaderParseErrorFormatter = HeaderParseErrorFormatter defaultErrorFormatter
+defaultHeaderParseErrorFormatter = HeaderParseErrorFormatter err400Formatter
 
 -- Internal
 
-defaultErrorFormatter :: ErrorFormatter
-defaultErrorFormatter _ _ e = err400 { errBody = cs e }
+err400Formatter :: ErrorFormatter
+err400Formatter _ _ e = err400 { errBody = cs e }
 
 -- These definitions suppress "unused import" warning.
 -- The imorts are needed for Haddock to correctly link to them.
