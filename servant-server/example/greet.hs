@@ -26,8 +26,11 @@ import           Servant.API.ContentTypes
 -- * Example
 
 customFormatter :: BodyParseErrorFormatter
-customFormatter = BodyParseErrorFormatter $ \tr accH err ->
-  let value = object ["combinator" .= show tr, "error" .= err] in
+customFormatter = BodyParseErrorFormatter $ \tr req err ->
+  let
+    value = object ["combinator" .= show tr, "error" .= err]
+    accH = getAcceptHeader req
+  in
   case handleAcceptH (Proxy :: Proxy '[JSON]) accH value of
     Nothing -> err400 { errBody = cs err }
     Just (ctypeH, body) -> err400
