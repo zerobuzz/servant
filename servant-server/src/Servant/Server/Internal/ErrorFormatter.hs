@@ -19,13 +19,14 @@ import           Servant.Server.Internal.ServerError
 --
 -- Default formatters will just return HTTP 400 status code with error
 -- message as response body.
-type DefaultErrorFormatters = '[BodyParseErrorFormatter, URLParseErrorFormatter, HeaderParseErrorFormatter]
+type DefaultErrorFormatters = '[BodyParseErrorFormatter, URLParseErrorFormatter, HeaderParseErrorFormatter, NotFoundErrorFormatter]
 
 defaultErrorFormatters :: Context DefaultErrorFormatters
 defaultErrorFormatters =
   defaulyBodyParseErrorFormatter
   :. defaultURLParseErrorFormatter
   :. defaultHeaderParseErrorFormatter
+  :. defaultNotFoundErrorFormatter
   :. EmptyContext
 
 -- | A custom formatter for errors produced by parsing combinators like
@@ -63,6 +64,14 @@ newtype HeaderParseErrorFormatter = HeaderParseErrorFormatter
 
 defaultHeaderParseErrorFormatter :: HeaderParseErrorFormatter
 defaultHeaderParseErrorFormatter = HeaderParseErrorFormatter err400Formatter
+
+-- | This formatter does not get neither 'TypeRep' nor error message.
+newtype NotFoundErrorFormatter = NotFoundErrorFormatter
+  { getNotFoundErrorFormatter :: Request -> ServerError
+  }
+
+defaultNotFoundErrorFormatter :: NotFoundErrorFormatter
+defaultNotFoundErrorFormatter = NotFoundErrorFormatter $ const err404
 
 -- Internal
 

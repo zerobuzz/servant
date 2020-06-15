@@ -94,6 +94,8 @@ module Servant.Server
   , defaultURLParseErrorFormatter
   , HeaderParseErrorFormatter (..)
   , defaultHeaderParseErrorFormatter
+  , NotFoundErrorFormatter (..)
+  , defaultNotFoundErrorFormatter
 
   , DefaultErrorFormatters
   , defaultErrorFormatters
@@ -143,10 +145,12 @@ import           Servant.Server.Internal
 serve :: (HasServer api DefaultErrorFormatters) => Proxy api -> Server api -> Application
 serve p = serveWithContext p defaultErrorFormatters
 
-serveWithContext :: (HasServer api context)
+serveWithContext :: (HasServer api context, HasContextEntry context NotFoundErrorFormatter)
     => Proxy api -> Context context -> Server api -> Application
 serveWithContext p context server =
-  toApplication (runRouter (route p context (emptyDelayed (Route server))))
+  toApplication (runRouter notFoundErrorFormatter (route p context (emptyDelayed (Route server))))
+  where
+    notFoundErrorFormatter = getContextEntry context
 
 -- | Hoist server implementation.
 --
