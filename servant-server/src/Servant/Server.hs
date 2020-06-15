@@ -98,6 +98,8 @@ module Servant.Server
   , DefaultErrorFormatters
   , defaultErrorFormatters
 
+  , getAcceptHeader
+
   -- * Re-exports
   , Application
   , Tagged (..)
