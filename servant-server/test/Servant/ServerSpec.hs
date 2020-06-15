@@ -55,8 +55,7 @@ import           Servant.API
                  QueryFlag, QueryParam, QueryParams, Raw, RemoteHost, ReqBody,
                  SourceIO, StdMethod (..), Stream, Strict, Verb, addHeader)
 import           Servant.Server
-                 (Context ((:.), EmptyContext), DefaultErrorFormatters,
-                 Handler, Server, Tagged (..), defaultErrorFormatters,
+                 (Context ((:.), EmptyContext), Handler, Server, Tagged (..),
                  emptyServer, err401, err403, err404, serve, serveWithContext)
 import           Servant.Test.ComprehensiveAPI
 import qualified Servant.Types.SourceT         as S
@@ -80,8 +79,8 @@ import           Servant.Server.Internal.Context
 -- This declaration simply checks that all instances are in place.
 _ = serveWithContext comprehensiveAPI comprehensiveApiContext
 
-comprehensiveApiContext :: Context (NamedContext "foo" '[] ': DefaultErrorFormatters)
-comprehensiveApiContext = NamedContext EmptyContext :. defaultErrorFormatters
+comprehensiveApiContext :: Context '[NamedContext "foo" '[]]
+comprehensiveApiContext = NamedContext EmptyContext :. EmptyContext
 
 -- * Specs
 

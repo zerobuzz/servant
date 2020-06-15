@@ -426,8 +426,8 @@ args :: Args
 args = defaultArgs { maxSuccess = 500 }
 
 -- Here's a Servant Context object we'll use
-ctx :: Context (BasicAuthCheck () ': DefaultErrorFormatters)
-ctx = BasicAuthCheck (const . return $ NoSuchUser) :. defaultErrorFormatters
+ctx :: Context '[BasicAuthCheck ()]
+ctx = BasicAuthCheck (const . return $ NoSuchUser) :. EmptyContext
 
 
 servantQuickcheckSpec :: Spec

@@ -66,8 +66,8 @@ genericServeTWithContext
   :: forall (routes :: * -> *) (m :: * -> *) (ctx :: [*]).
      ( GenericServant routes (AsServerT m)
      , GenericServant routes AsApi
-     , HasServer (ToServantApi routes) ctx
-     , HasContextEntry ctx NotFoundErrorFormatter
+     , HasServer (ToServantApi routes) (ctx .++ DefaultErrorFormatters)
+     , HasContextEntry (ctx .++ DefaultErrorFormatters) NotFoundErrorFormatter
      , ServerT (ToServantApi routes) m ~ ToServant routes (AsServerT m)
      )
   => (forall a. m a -> Handler a) -- ^ 'hoistServer' argument to come back to 'Handler'
@@ -79,7 +79,7 @@ genericServeTWithContext f server ctx =
   hoistServerWithContext p pctx f (genericServerT server)
   where
     p = genericApi (Proxy :: Proxy routes)
-    pctx = Proxy :: Proxy ctx
+    pctx = Proxy :: Proxy (ctx .++ DefaultErrorFormatters)
 
 -- | Transform a record of endpoints into a 'Server'.
 genericServer

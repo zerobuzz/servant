@@ -80,7 +80,7 @@ errorOrderSpec :: Spec
 errorOrderSpec =
   describe "HTTP error order" $
     with (return $ serveWithContext errorOrderApi
-                   (errorOrderAuthCheck :. defaultErrorFormatters)
+                   (errorOrderAuthCheck :. EmptyContext)
                    errorOrderServer
          ) $ do
   let badContentType  = (hContentType, "text/plain")

@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE TypeFamilies     #-}
+{-# LANGUAGE TypeOperators    #-}
 
 -- | This module lets you implement 'Server's for defined APIs. You'll
 -- most likely just need 'serve'.
@@ -35,6 +36,8 @@ module Servant.Server
   -- * Context
   , Context(..)
   , HasContextEntry(getContextEntry)
+  , type (.++)
+  , (.++)
   -- ** NamedContext
   , NamedContext(..)
   , descendIntoNamedContext
@@ -143,14 +146,19 @@ import           Servant.Server.Internal
 -- > main = Network.Wai.Handler.Warp.run 8080 app
 --
 serve :: (HasServer api DefaultErrorFormatters) => Proxy api -> Server api -> Application
-serve p = serveWithContext p defaultErrorFormatters
+serve p = serveWithContext p EmptyContext
 
-serveWithContext :: (HasServer api context, HasContextEntry context NotFoundErrorFormatter)
+-- | Like 'serve', but allows you to pass custotm context.
+--
+-- 'defaultErrorFormatters' will always be appended to the end of the passed context,
+-- but if you pass your own formatter, it will override the default one.
+serveWithContext :: (HasServer api (context .++ DefaultErrorFormatters), HasContextEntry (context .++ DefaultErrorFormatters) NotFoundErrorFormatter)
     => Proxy api -> Context context -> Server api -> Application
 serveWithContext p context server =
-  toApplication (runRouter notFoundErrorFormatter (route p context (emptyDelayed (Route server))))
+  toApplication (runRouter notFoundErrorFormatter (route p fullContext (emptyDelayed (Route server))))
   where
-    notFoundErrorFormatter = getContextEntry context
+    fullContext = context .++ defaultErrorFormatters
+    notFoundErrorFormatter = getContextEntry fullContext
 
 -- | Hoist server implementation.
 --
@@ -228,13 +236,15 @@ hoistServer p = hoistServerWithContext p (Proxy :: Proxy DefaultErrorFormatters)
 -- code will be returned.
 --
 layout :: (HasServer api DefaultErrorFormatters) => Proxy api -> Text
-layout p = layoutWithContext p defaultErrorFormatters
+layout p = layoutWithContext p EmptyContext
 
 -- | Variant of 'layout' that takes an additional 'Context'.
-layoutWithContext :: (HasServer api context)
+layoutWithContext :: (HasServer api (context .++ DefaultErrorFormatters))
     => Proxy api -> Context context -> Text
 layoutWithContext p context =
-  routerLayout (route p context (emptyDelayed (FailFatal err501)))
+  routerLayout (route p fullContext (emptyDelayed (FailFatal err501)))
+  where
+    fullContext = context .++ defaultErrorFormatters
 
 -- $setup
 -- >>> :set -XDataKinds
