@@ -17,8 +17,6 @@ import           Network.Wai.Handler.Warp
 
 import           Servant
 
-import           Data.Aeson
-                 (object)
 import           Data.String.Conversions
                  (cs)
 import           Servant.API.ContentTypes
@@ -37,6 +35,10 @@ customFormatter = BodyParseErrorFormatter $ \tr req err ->
       { errBody = body
       , errHeaders = [("Content-Type", cs ctypeH)]
       }
+
+notFoundFormatter :: NotFoundErrorFormatter
+notFoundFormatter = NotFoundErrorFormatter $ \req ->
+  err404 { errBody = cs $ "Not found path: " <> rawPathInfo req }
 
 -- | A greet message data type
 newtype Greet = Greet { _msg :: Text }
@@ -80,7 +82,7 @@ server = helloH :<|> postGreetH :<|> deleteGreetH
 -- Turn the server into a WAI app. 'serve' is provided by servant,
 -- more precisely by the Servant.Server module.
 test :: Application
-test = serveWithContext testApi (customFormatter :. defaultErrorFormatters) server
+test = serveWithContext testApi (customFormatter :. notFoundFormatter :. defaultErrorFormatters) server
 
 -- Run the server.
 --
