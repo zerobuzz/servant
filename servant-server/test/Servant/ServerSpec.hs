@@ -5,10 +5,8 @@
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE PolyKinds            #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeOperators        #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -freduction-depth=100 #-}
 
 module Servant.ServerSpec where
@@ -50,12 +48,12 @@ import           Network.Wai.Test
 import           Servant.API
                  ((:<|>) (..), (:>), AuthProtect, BasicAuth,
                  BasicAuthData (BasicAuthData), Capture, Capture', CaptureAll,
-                 Delete, EmptyAPI, Get, Header, Headers, HttpVersion,
-                 IsSecure (..), JSON, Lenient, NoContent (..), NoContentVerb,
-                 NoFraming, OctetStream, Patch, PlainText, Post, Put,
-                 QueryFlag, QueryParam, QueryParams, Raw, RemoteHost, ReqBody,
-                 SourceIO, StdMethod (..), Stream, Strict, Union, UVerb, Verb,
-                 WithStatus(WithStatus), addHeader)
+                 Delete, EmptyAPI, Get, HasStatus(StatusOf), Header, Headers,
+                 HttpVersion, IsSecure (..), JSON, Lenient, NoContent (..),
+                 NoContentVerb, NoFraming, OctetStream, Patch, PlainText, Post,
+                 Put, QueryFlag, QueryParam, QueryParams, Raw, RemoteHost,
+                 ReqBody, SourceIO, StdMethod (..), Stream, Strict, Union,
+                 UVerb, Verb, addHeader)
 import           Servant.Server
                  (Context ((:.), EmptyContext), Handler, Server, Tagged (..),
                  emptyServer, err401, err403, err404, respond, serve,
@@ -63,8 +61,7 @@ import           Servant.Server
 import           Servant.Test.ComprehensiveAPI
 import qualified Servant.Types.SourceT             as S
 import           Test.Hspec
-                 (Spec, beforeAll, context, describe, it, shouldBe,
-                 shouldContain)
+                 (Spec, context, describe, it, shouldBe, shouldContain)
 import           Test.Hspec.Wai
                  (get, liftIO, matchHeaders, matchStatus, shouldRespondWith,
                  with, (<:>))
@@ -791,13 +788,28 @@ genAuthSpec = do
 -- * UVerb {{{
 ------------------------------------------------------------------------------
 
-instance (Generic (WithStatus n a), ToJSON a) => ToJSON (WithStatus n a)
+newtype PersonResponse = PersonResponse Person
+  deriving Generic
+instance ToJSON PersonResponse
+instance HasStatus PersonResponse where
+  type StatusOf PersonResponse = 200
 
-instance (Generic (WithStatus n a), FromJSON a) => FromJSON (WithStatus n a)
+newtype RedirectResponse = RedirectResponse String
+  deriving Generic
+instance ToJSON RedirectResponse
+instance HasStatus RedirectResponse where
+  type StatusOf RedirectResponse = 301
+
+newtype AnimalResponse = AnimalResponse Animal
+  deriving Generic
+instance ToJSON AnimalResponse
+instance HasStatus AnimalResponse where
+  type StatusOf AnimalResponse = 203
+
 
 type UVerbApi
-  = "person" :> Capture "shouldRedirect" Bool :> UVerb 'GET '[JSON] '[WithStatus 200 Person, WithStatus 301 String]
-  :<|> "animal" :> UVerb 'GET '[JSON] '[WithStatus 203 Animal]
+  = "person" :> Capture "shouldRedirect" Bool :> UVerb 'GET '[JSON] '[PersonResponse, RedirectResponse]
+  :<|> "animal" :> UVerb 'GET '[JSON] '[AnimalResponse]
 
 uverbSpec :: Spec
 uverbSpec = describe "Servant.API.UVerb " $ do
@@ -807,17 +819,17 @@ uverbSpec = describe "Servant.API.UVerb " $ do
 
       personHandler
         :: Bool
-        -> Handler (Union '[WithStatus 200 Person
-                           ,WithStatus 301 String])
-      personHandler True = respond $ WithStatus @301 ("over there!" :: String)
-      personHandler False = respond (WithStatus @200 joe)
+        -> Handler (Union '[PersonResponse
+                           ,RedirectResponse])
+      personHandler True = respond $ RedirectResponse "over there!"
+      personHandler False = respond $ PersonResponse joe
 
-      animalHandler = respond (WithStatus @203 mouse)
+      animalHandler = respond $ AnimalResponse mouse
 
       server :: Server UVerbApi
       server = personHandler :<|> animalHandler
 
-  with (pure $ serve (Proxy @UVerbApi) server) $ do
+  with (pure $ serve (Proxy :: Proxy UVerbApi) server) $ do
     context "A route returning either 301/String or 200/Person" $ do
       context "when requesting the person" $ do
         let theRequest = THW.get "/person/false"
