@@ -258,8 +258,8 @@ captureSpec = do
 
     with (return (serve
         (Proxy :: Proxy (Capture "captured" String :> Raw))
-        (\ "captured" -> Tagged $ \request_ respond ->
-            respond $ responseLBS ok200 [] (cs $ show $ pathInfo request_)))) $ do
+        (\ "captured" -> Tagged $ \request_ sendResponse ->
+            sendResponse $ responseLBS ok200 [] (cs $ show $ pathInfo request_)))) $ do
       it "strips the captured path snippet from pathInfo" $ do
         get "/captured/foo" `shouldRespondWith` (fromString (show ["foo" :: String]))
 
@@ -310,8 +310,8 @@ captureAllSpec = do
 
     with (return (serve
         (Proxy :: Proxy (CaptureAll "segments" String :> Raw))
-        (\ _captured -> Tagged $ \request_ respond ->
-            respond $ responseLBS ok200 [] (cs $ show $ pathInfo request_)))) $ do
+        (\ _captured -> Tagged $ \request_ sendResponse ->
+            sendResponse $ responseLBS ok200 [] (cs $ show $ pathInfo request_)))) $ do
       it "consumes everything from pathInfo" $ do
         get "/captured/foo/bar/baz" `shouldRespondWith` (fromString (show ([] :: [Int])))
 
@@ -549,8 +549,8 @@ rawApi :: Proxy RawApi
 rawApi = Proxy
 
 rawApplication :: Show a => (Request -> a) -> Tagged m Application
-rawApplication f = Tagged $ \request_ respond ->
-    respond $ responseLBS ok200 []
+rawApplication f = Tagged $ \request_ sendResponse ->
+    sendResponse $ responseLBS ok200 []
         (cs $ show $ f request_)
 
 rawSpec :: Spec
@@ -711,7 +711,7 @@ basicAuthApi = Proxy
 basicAuthServer :: Server BasicAuthAPI
 basicAuthServer =
   const (return jerry) :<|>
-  (Tagged $ \ _ respond -> respond $ responseLBS imATeapot418 [] "")
+  (Tagged $ \ _ sendResponse -> sendResponse $ responseLBS imATeapot418 [] "")
 
 basicAuthContext :: Context '[ BasicAuthCheck () ]
 basicAuthContext =
@@ -756,7 +756,7 @@ genAuthApi = Proxy
 
 genAuthServer :: Server GenAuthAPI
 genAuthServer = const (return tweety)
-           :<|> (Tagged $ \ _ respond -> respond $ responseLBS imATeapot418 [] "")
+           :<|> (Tagged $ \ _ sendResponse -> sendResponse $ responseLBS imATeapot418 [] "")
 
 type instance AuthServerData (AuthProtect "auth") = ()
 
