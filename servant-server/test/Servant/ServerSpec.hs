@@ -5,9 +5,10 @@
 {-# LANGUAGE OverloadedStrings    #-}
 {-# LANGUAGE PolyKinds            #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeOperators        #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -freduction-depth=100 #-}
 
 module Servant.ServerSpec where
@@ -53,14 +54,17 @@ import           Servant.API
                  IsSecure (..), JSON, Lenient, NoContent (..), NoContentVerb,
                  NoFraming, OctetStream, Patch, PlainText, Post, Put,
                  QueryFlag, QueryParam, QueryParams, Raw, RemoteHost, ReqBody,
-                 SourceIO, StdMethod (..), Stream, Strict, Verb, addHeader)
+                 SourceIO, StdMethod (..), Stream, Strict, Union, UVerb, Verb,
+                 WithStatus(WithStatus), addHeader)
 import           Servant.Server
                  (Context ((:.), EmptyContext), Handler, Server, Tagged (..),
-                 emptyServer, err401, err403, err404, serve, serveWithContext)
+                 emptyServer, err401, err403, err404, respond, serve,
+                 serveWithContext)
 import           Servant.Test.ComprehensiveAPI
 import qualified Servant.Types.SourceT             as S
 import           Test.Hspec
-                 (Spec, context, describe, it, shouldBe, shouldContain)
+                 (Spec, beforeAll, context, describe, it, shouldBe,
+                 shouldContain)
 import           Test.Hspec.Wai
                  (get, liftIO, matchHeaders, matchStatus, shouldRespondWith,
                  with, (<:>))
@@ -87,6 +91,7 @@ comprehensiveApiContext = NamedContext EmptyContext :. EmptyContext
 spec :: Spec
 spec = do
   verbSpec
+  uverbSpec
   captureSpec
   captureAllSpec
   queryParamSpec
@@ -780,6 +785,58 @@ genAuthSpec = do
 
         it "plays nice with subsequent Raw endpoints" $ do
           get "/foo" `shouldRespondWith` 418
+
+-- }}}
+------------------------------------------------------------------------------
+-- * UVerb {{{
+------------------------------------------------------------------------------
+
+instance (Generic (WithStatus n a), ToJSON a) => ToJSON (WithStatus n a)
+
+instance (Generic (WithStatus n a), FromJSON a) => FromJSON (WithStatus n a)
+
+type UVerbApi
+  = "person" :> Capture "shouldRedirect" Bool :> UVerb 'GET '[JSON] '[WithStatus 200 Person, WithStatus 301 String]
+  :<|> "animal" :> UVerb 'GET '[JSON] '[WithStatus 203 Animal]
+
+uverbSpec :: Spec
+uverbSpec = describe "Servant.API.UVerb " $ do
+  let
+      joe = Person "joe" 42
+      mouse = Animal "Mouse" 7
+
+      personHandler
+        :: Bool
+        -> Handler (Union '[WithStatus 200 Person
+                           ,WithStatus 301 String])
+      personHandler True = respond $ WithStatus @301 ("over there!" :: String)
+      personHandler False = respond (WithStatus @200 joe)
+
+      animalHandler = respond (WithStatus @203 mouse)
+
+      server :: Server UVerbApi
+      server = personHandler :<|> animalHandler
+
+  with (pure $ serve (Proxy @UVerbApi) server) $ do
+    context "A route returning either 301/String or 200/Person" $ do
+      context "when requesting the person" $ do
+        let theRequest = THW.get "/person/false"
+        it "returns status 200" $
+            theRequest `shouldRespondWith` 200
+        it "returns a person" $ do
+            response <- theRequest
+            liftIO $ decode' (simpleBody response) `shouldBe` Just joe
+      context "requesting the redirect" $
+        it "returns a message and status 301" $
+          THW.get "/person/true"
+            `shouldRespondWith` "\"over there!\"" {matchStatus = 301}
+    context "a route with a single response type" $ do
+      let theRequest = THW.get "/animal"
+      it "should return the defined status code" $
+         theRequest `shouldRespondWith` 203
+      it "should return the expected response" $ do
+        response <- theRequest
+        liftIO $ decode' (simpleBody response) `shouldBe` Just mouse
 
 -- }}}
 ------------------------------------------------------------------------------
