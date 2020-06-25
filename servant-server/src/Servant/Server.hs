@@ -148,7 +148,7 @@ import           Servant.Server.Internal
 serve :: (HasServer api DefaultErrorFormatters) => Proxy api -> Server api -> Application
 serve p = serveWithContext p EmptyContext
 
--- | Like 'serve', but allows you to pass custotm context.
+-- | Like 'serve', but allows you to pass custom context.
 --
 -- 'defaultErrorFormatters' will always be appended to the end of the passed context,
 -- but if you pass your own formatter, it will override the default one.
