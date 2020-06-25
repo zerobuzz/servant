@@ -67,7 +67,7 @@ genericServeTWithContext
      ( GenericServant routes (AsServerT m)
      , GenericServant routes AsApi
      , HasServer (ToServantApi routes) (ctx .++ DefaultErrorFormatters)
-     , HasContextEntry (ctx .++ DefaultErrorFormatters) NotFoundErrorFormatter
+     , HasContextEntry (ctx .++ DefaultErrorFormatters) ErrorFormatters
      , ServerT (ToServantApi routes) m ~ ToServant routes (AsServerT m)
      )
   => (forall a. m a -> Handler a) -- ^ 'hoistServer' argument to come back to 'Handler'

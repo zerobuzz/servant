@@ -15,19 +15,27 @@ import           Servant.API
 import           Servant.Server.Internal.Context
 import           Servant.Server.Internal.ServerError
 
--- | 'Context' that contains default formatters for all error types.
+-- | 'Context' that contains default error formatters.
 --
 -- Default formatters will just return HTTP 400 status code with error
 -- message as response body.
-type DefaultErrorFormatters = '[BodyParseErrorFormatter, URLParseErrorFormatter, HeaderParseErrorFormatter, NotFoundErrorFormatter]
+type DefaultErrorFormatters = '[ErrorFormatters]
 
-defaultErrorFormatters :: Context DefaultErrorFormatters
-defaultErrorFormatters =
-  defaulyBodyParseErrorFormatter
-  :. defaultURLParseErrorFormatter
-  :. defaultHeaderParseErrorFormatter
-  :. defaultNotFoundErrorFormatter
-  :. EmptyContext
+-- | TODO doc
+data ErrorFormatters = ErrorFormatters
+  { bodyParserErrorFormatter :: ErrorFormatter
+  , urlParseErrorFormatter :: ErrorFormatter
+  , headerParseErrorFormatter :: ErrorFormatter
+  , notFoundErrorFormatter :: NotFoundErrorFormatter
+  }
+
+defaultErrorFormatters :: ErrorFormatters
+defaultErrorFormatters = ErrorFormatters
+  { bodyParserErrorFormatter = err400Formatter
+  , urlParseErrorFormatter = err400Formatter
+  , headerParseErrorFormatter = err400Formatter
+  , notFoundErrorFormatter = const err404
+  }
 
 -- | A custom formatter for errors produced by parsing combinators like
 -- 'ReqBody' or 'Capture'.
@@ -40,38 +48,8 @@ defaultErrorFormatters =
 -- for example.
 type ErrorFormatter = TypeRep -> Request -> String -> ServerError
 
--- | Formatter for errors that occur while parsing request body.
-newtype BodyParseErrorFormatter = BodyParseErrorFormatter
-  { getBodyParseErrorFormatter :: ErrorFormatter
-  }
-
-defaulyBodyParseErrorFormatter :: BodyParseErrorFormatter
-defaulyBodyParseErrorFormatter = BodyParseErrorFormatter err400Formatter
-
--- | Formatter for errors that occur while parsing URL parts, like 'Servant.API.Capture' or
--- 'Servant.API.QueryParam'.
-newtype URLParseErrorFormatter = URLParseErrorFormatter
-  { getUrlParseErrorFormatter :: ErrorFormatter
-  }
-
-defaultURLParseErrorFormatter :: URLParseErrorFormatter
-defaultURLParseErrorFormatter = URLParseErrorFormatter err400Formatter
-
--- | Formatter for errors that occur while parsing HTTP headers.
-newtype HeaderParseErrorFormatter = HeaderParseErrorFormatter
-  { getHeaderParseErrorFormatter :: ErrorFormatter
-  }
-
-defaultHeaderParseErrorFormatter :: HeaderParseErrorFormatter
-defaultHeaderParseErrorFormatter = HeaderParseErrorFormatter err400Formatter
-
 -- | This formatter does not get neither 'TypeRep' nor error message.
-newtype NotFoundErrorFormatter = NotFoundErrorFormatter
-  { getNotFoundErrorFormatter :: Request -> ServerError
-  }
-
-defaultNotFoundErrorFormatter :: NotFoundErrorFormatter
-defaultNotFoundErrorFormatter = NotFoundErrorFormatter $ const err404
+type NotFoundErrorFormatter = Request -> ServerError
 
 -- Internal
 
@@ -84,3 +62,5 @@ _RB :: Proxy ReqBody
 _RB = undefined
 _C :: Proxy Capture
 _C = undefined
+_CT :: Proxy Context
+_CT = undefined

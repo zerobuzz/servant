@@ -32,7 +32,7 @@ routerSpec :: Spec
 routerSpec = do
   describe "tweakResponse" $ do
     let app' :: Application
-        app' = toApplication $ runRouter defaultNotFoundErrorFormatter router'
+        app' = toApplication $ runRouter (const err404) router'
 
         router', router :: Router ()
         router' = tweakResponse (fmap twk) router
@@ -48,7 +48,7 @@ routerSpec = do
 
   describe "runRouter" $ do
     let toApp :: Router () -> Application
-        toApp = toApplication . runRouter defaultNotFoundErrorFormatter
+        toApp = toApplication . runRouter (const err404)
 
         cap :: Router ()
         cap = CaptureRouter $
@@ -106,7 +106,7 @@ shouldHaveSameStructureAs p1 p2 =
 
 makeTrivialRouter :: (HasServer layout DefaultErrorFormatters) => Proxy layout -> Router ()
 makeTrivialRouter p =
-  route p defaultErrorFormatters (emptyDelayed (FailFatal err501))
+  route p (defaultErrorFormatters :. EmptyContext) (emptyDelayed (FailFatal err501))
 
 type End = Get '[JSON] NoContent
 

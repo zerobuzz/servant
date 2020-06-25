@@ -158,7 +158,7 @@ runRouter :: NotFoundErrorFormatter -> Router () -> RoutingApplication
 runRouter fmt r = runRouterEnv fmt r ()
 
 runRouterEnv :: NotFoundErrorFormatter -> Router env -> env -> RoutingApplication
-runRouterEnv fmt@(NotFoundErrorFormatter notFoundErrorFormatter) router env request respond  =
+runRouterEnv fmt router env request respond  =
   case router of
     StaticRouter table ls ->
       case pathInfo request of
@@ -168,12 +168,12 @@ runRouterEnv fmt@(NotFoundErrorFormatter notFoundErrorFormatter) router env requ
         first : rest | Just router' <- M.lookup first table
           -> let request' = request { pathInfo = rest }
              in  runRouterEnv fmt router' env request' respond
-        _ -> respond $ Fail $ notFoundErrorFormatter request
+        _ -> respond $ Fail $ fmt request
     CaptureRouter router' ->
       case pathInfo request of
-        []   -> respond $ Fail $ notFoundErrorFormatter request
+        []   -> respond $ Fail $ fmt request
         -- This case is to handle trailing slashes.
-        [""] -> respond $ Fail $ notFoundErrorFormatter request
+        [""] -> respond $ Fail $ fmt request
         first : rest
           -> let request' = request { pathInfo = rest }
              in  runRouterEnv fmt router' (first, env) request' respond
@@ -191,9 +191,9 @@ runRouterEnv fmt@(NotFoundErrorFormatter notFoundErrorFormatter) router env requ
 -- If all fail normally, we pick the "best" error.
 --
 runChoice :: NotFoundErrorFormatter -> [env -> RoutingApplication] -> env -> RoutingApplication
-runChoice fmt@(NotFoundErrorFormatter notFoundErrorFormatter) ls =
+runChoice fmt ls =
   case ls of
-    []       -> \ _ request respond -> respond (Fail $ notFoundErrorFormatter request)
+    []       -> \ _ request respond -> respond (Fail $ fmt request)
     [r]      -> r
     (r : rs) ->
       \ env request respond ->

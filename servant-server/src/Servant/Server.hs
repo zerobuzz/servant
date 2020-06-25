@@ -91,14 +91,13 @@ module Servant.Server
 
   -- * Formatting of errors from combinators
   , ErrorFormatter
-  , BodyParseErrorFormatter (..)
-  , defaulyBodyParseErrorFormatter
-  , URLParseErrorFormatter (..)
-  , defaultURLParseErrorFormatter
-  , HeaderParseErrorFormatter (..)
-  , defaultHeaderParseErrorFormatter
-  , NotFoundErrorFormatter (..)
-  , defaultNotFoundErrorFormatter
+  , NotFoundErrorFormatter
+  , ErrorFormatters
+
+  , bodyParserErrorFormatter
+  , urlParseErrorFormatter
+  , headerParseErrorFormatter
+  , notFoundErrorFormatter
 
   , DefaultErrorFormatters
   , defaultErrorFormatters
@@ -152,13 +151,15 @@ serve p = serveWithContext p EmptyContext
 --
 -- 'defaultErrorFormatters' will always be appended to the end of the passed context,
 -- but if you pass your own formatter, it will override the default one.
-serveWithContext :: (HasServer api (context .++ DefaultErrorFormatters), HasContextEntry (context .++ DefaultErrorFormatters) NotFoundErrorFormatter)
+serveWithContext :: (HasServer api (context .++ DefaultErrorFormatters)
+                    , HasContextEntry (context .++ DefaultErrorFormatters) ErrorFormatters
+                    )
     => Proxy api -> Context context -> Server api -> Application
 serveWithContext p context server =
-  toApplication (runRouter notFoundErrorFormatter (route p fullContext (emptyDelayed (Route server))))
+  toApplication (runRouter format404 (route p fullContext (emptyDelayed (Route server))))
   where
-    fullContext = context .++ defaultErrorFormatters
-    notFoundErrorFormatter = getContextEntry fullContext
+    fullContext = context .++ (defaultErrorFormatters :. EmptyContext)
+    format404 = notFoundErrorFormatter $ getContextEntry fullContext
 
 -- | Hoist server implementation.
 --
@@ -244,7 +245,7 @@ layoutWithContext :: (HasServer api (context .++ DefaultErrorFormatters))
 layoutWithContext p context =
   routerLayout (route p fullContext (emptyDelayed (FailFatal err501)))
   where
-    fullContext = context .++ defaultErrorFormatters
+    fullContext = context .++ (defaultErrorFormatters :. EmptyContext)
 
 -- $setup
 -- >>> :set -XDataKinds

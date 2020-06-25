@@ -23,8 +23,8 @@ import           Servant.API.ContentTypes
 
 -- * Example
 
-customFormatter :: BodyParseErrorFormatter
-customFormatter = BodyParseErrorFormatter $ \tr req err ->
+customFormatter :: ErrorFormatter
+customFormatter tr req err =
   let
     value = object ["combinator" .= show tr, "error" .= err]
     accH = getAcceptHeader req
@@ -37,8 +37,14 @@ customFormatter = BodyParseErrorFormatter $ \tr req err ->
       }
 
 notFoundFormatter :: NotFoundErrorFormatter
-notFoundFormatter = NotFoundErrorFormatter $ \req ->
+notFoundFormatter req =
   err404 { errBody = cs $ "Not found path: " <> rawPathInfo req }
+
+customFormatters :: ErrorFormatters
+customFormatters = defaultErrorFormatters
+  { bodyParserErrorFormatter = customFormatter
+  , notFoundErrorFormatter = notFoundFormatter
+  }
 
 -- | A greet message data type
 newtype Greet = Greet { _msg :: Text }
@@ -82,7 +88,7 @@ server = helloH :<|> postGreetH :<|> deleteGreetH
 -- Turn the server into a WAI app. 'serve' is provided by servant,
 -- more precisely by the Servant.Server module.
 test :: Application
-test = serveWithContext testApi (customFormatter :. notFoundFormatter :. defaultErrorFormatters) server
+test = serveWithContext testApi (customFormatters :. EmptyContext) server
 
 -- Run the server.
 --

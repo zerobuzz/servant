@@ -219,7 +219,7 @@ errorRetrySpec :: Spec
 errorRetrySpec =
   describe "Handler search" $
     with (return $ serveWithContext errorRetryApi
-                         (errorOrderAuthCheck :. defaultErrorFormatters)
+                         (errorOrderAuthCheck :. defaultErrorFormatters :. EmptyContext)
                          errorRetryServer
          ) $ do
 
