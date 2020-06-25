@@ -90,6 +90,9 @@ module Servant.Server
   , err505
 
   -- * Formatting of errors from combinators
+  --
+  -- | You can configure how Servant will render errors that occur while parsing the request.
+
   , ErrorFormatter
   , NotFoundErrorFormatter
   , ErrorFormatters
@@ -151,7 +154,7 @@ serve p = serveWithContext p EmptyContext
 --
 -- 'defaultErrorFormatters' will always be appended to the end of the passed context,
 -- but if you pass your own formatter, it will override the default one.
-serveWithContext :: (HasServer api (context .++ DefaultErrorFormatters)
+serveWithContext :: ( HasServer api (context .++ DefaultErrorFormatters)
                     , HasContextEntry (context .++ DefaultErrorFormatters) ErrorFormatters
                     )
     => Proxy api -> Context context -> Server api -> Application

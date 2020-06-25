@@ -1,6 +1,5 @@
 {-# LANGUAGE DataKinds #-}
 
--- | TODO: more documentation for this module
 module Servant.Server.Internal.ErrorFormatter
   where
 
@@ -16,19 +15,24 @@ import           Servant.Server.Internal.Context
 import           Servant.Server.Internal.ServerError
 
 -- | 'Context' that contains default error formatters.
---
--- Default formatters will just return HTTP 400 status code with error
--- message as response body.
 type DefaultErrorFormatters = '[ErrorFormatters]
 
--- | TODO doc
+-- | A collection of error formatters for different situations.
+--
+-- If you need to override one of them, use 'defaultErrorFormatters' with record update syntax.
 data ErrorFormatters = ErrorFormatters
-  { bodyParserErrorFormatter :: ErrorFormatter
+  { -- | Format error from parsing the request body.
+    bodyParserErrorFormatter :: ErrorFormatter
+    -- | Format error from parsing url parts or query parameters.
   , urlParseErrorFormatter :: ErrorFormatter
+    -- | Format error from parsing request headers.
   , headerParseErrorFormatter :: ErrorFormatter
+    -- | Format error for not found URLs.
   , notFoundErrorFormatter :: NotFoundErrorFormatter
   }
 
+-- | Default formatters will just return HTTP 400 status code with error
+-- message as response body.
 defaultErrorFormatters :: ErrorFormatters
 defaultErrorFormatters = ErrorFormatters
   { bodyParserErrorFormatter = err400Formatter
