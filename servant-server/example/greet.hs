@@ -38,7 +38,7 @@ customFormatter tr req err =
 
 notFoundFormatter :: NotFoundErrorFormatter
 notFoundFormatter req =
-  err404 { errBody = cs $ "Not found path: " <> rawPathInfo req }
+  err404 { errBody = cs $ "Path not found: " <> rawPathInfo req }
 
 customFormatters :: ErrorFormatters
 customFormatters = defaultErrorFormatters
