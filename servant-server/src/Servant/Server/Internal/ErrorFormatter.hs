@@ -1,4 +1,8 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Servant.Server.Internal.ErrorFormatter
   where
@@ -54,6 +58,11 @@ type ErrorFormatter = TypeRep -> Request -> String -> ServerError
 
 -- | This formatter does not get neither 'TypeRep' nor error message.
 type NotFoundErrorFormatter = Request -> ServerError
+
+type MkContextWithErrorFormatter (ctx :: [*]) = ctx .++ DefaultErrorFormatters
+
+mkContextWithErrorFormatter :: forall (ctx :: [*]). Context ctx -> Context (MkContextWithErrorFormatter ctx)
+mkContextWithErrorFormatter ctx = ctx .++ (defaultErrorFormatters :. EmptyContext)
 
 -- Internal
 

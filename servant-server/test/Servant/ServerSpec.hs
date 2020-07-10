@@ -21,8 +21,8 @@ import           Control.Monad.Error.Class
                  (MonadError (..))
 import           Data.Aeson
                  (FromJSON, ToJSON, decode', encode)
-import qualified Data.ByteString               as BS
-import qualified Data.ByteString.Base64        as Base64
+import qualified Data.ByteString                   as BS
+import qualified Data.ByteString.Base64            as Base64
 import           Data.Char
                  (toUpper)
 import           Data.Maybe
@@ -33,7 +33,7 @@ import           Data.String
                  (fromString)
 import           Data.String.Conversions
                  (cs)
-import qualified Data.Text                     as T
+import qualified Data.Text                         as T
 import           GHC.Generics
                  (Generic)
 import           Network.HTTP.Types
@@ -58,13 +58,13 @@ import           Servant.Server
                  (Context ((:.), EmptyContext), Handler, Server, Tagged (..),
                  emptyServer, err401, err403, err404, serve, serveWithContext)
 import           Servant.Test.ComprehensiveAPI
-import qualified Servant.Types.SourceT         as S
+import qualified Servant.Types.SourceT             as S
 import           Test.Hspec
                  (Spec, context, describe, it, shouldBe, shouldContain)
 import           Test.Hspec.Wai
                  (get, liftIO, matchHeaders, matchStatus, shouldRespondWith,
                  with, (<:>))
-import qualified Test.Hspec.Wai                as THW
+import qualified Test.Hspec.Wai                    as THW
 
 import           Servant.Server.Experimental.Auth
                  (AuthHandler, AuthServerData, mkAuthHandler)

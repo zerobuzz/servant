@@ -147,22 +147,20 @@ import           Servant.Server.Internal
 -- > main :: IO ()
 -- > main = Network.Wai.Handler.Warp.run 8080 app
 --
-serve :: (HasServer api DefaultErrorFormatters) => Proxy api -> Server api -> Application
+serve :: (HasServer api '[]) => Proxy api -> Server api -> Application
 serve p = serveWithContext p EmptyContext
 
 -- | Like 'serve', but allows you to pass custom context.
 --
 -- 'defaultErrorFormatters' will always be appended to the end of the passed context,
 -- but if you pass your own formatter, it will override the default one.
-serveWithContext :: ( HasServer api (context .++ DefaultErrorFormatters)
-                    , HasContextEntry (context .++ DefaultErrorFormatters) ErrorFormatters
-                    )
+serveWithContext :: ( HasServer api context
+                    , HasContextEntry (context .++ DefaultErrorFormatters) ErrorFormatters )
     => Proxy api -> Context context -> Server api -> Application
 serveWithContext p context server =
-  toApplication (runRouter format404 (route p fullContext (emptyDelayed (Route server))))
+  toApplication (runRouter format404 (route p context (emptyDelayed (Route server))))
   where
-    fullContext = context .++ (defaultErrorFormatters :. EmptyContext)
-    format404 = notFoundErrorFormatter $ getContextEntry fullContext
+    format404 = notFoundErrorFormatter . getContextEntry . mkContextWithErrorFormatter $ context
 
 -- | Hoist server implementation.
 --
@@ -184,9 +182,9 @@ serveWithContext p context server =
 -- >>> let nt x = return (runReader x "hi")
 -- >>> let mainServer = hoistServer readerApi nt readerServer :: Server ReaderAPI
 --
-hoistServer :: (HasServer api DefaultErrorFormatters) => Proxy api
+hoistServer :: (HasServer api '[]) => Proxy api
             -> (forall x. m x -> n x) -> ServerT api m -> ServerT api n
-hoistServer p = hoistServerWithContext p (Proxy :: Proxy DefaultErrorFormatters)
+hoistServer p = hoistServerWithContext p (Proxy :: Proxy '[])
 
 -- | The function 'layout' produces a textual description of the internal
 -- router layout for debugging purposes. Note that the router layout is
@@ -239,16 +237,14 @@ hoistServer p = hoistServerWithContext p (Proxy :: Proxy DefaultErrorFormatters)
 -- that one takes precedence. If both parts fail, the \"better\" error
 -- code will be returned.
 --
-layout :: (HasServer api DefaultErrorFormatters) => Proxy api -> Text
+layout :: (HasServer api '[]) => Proxy api -> Text
 layout p = layoutWithContext p EmptyContext
 
 -- | Variant of 'layout' that takes an additional 'Context'.
-layoutWithContext :: (HasServer api (context .++ DefaultErrorFormatters))
+layoutWithContext :: (HasServer api context)
     => Proxy api -> Context context -> Text
 layoutWithContext p context =
-  routerLayout (route p fullContext (emptyDelayed (FailFatal err501)))
-  where
-    fullContext = context .++ (defaultErrorFormatters :. EmptyContext)
+  routerLayout (route p context (emptyDelayed (FailFatal err501)))
 
 -- $setup
 -- >>> :set -XDataKinds

@@ -26,8 +26,8 @@ module Servant.Server.Internal
   , module Servant.Server.Internal.DelayedIO
   , module Servant.Server.Internal.ErrorFormatter
   , module Servant.Server.Internal.Handler
-  , module Servant.Server.Internal.RouteResult
   , module Servant.Server.Internal.Router
+  , module Servant.Server.Internal.RouteResult
   , module Servant.Server.Internal.RoutingApplication
   , module Servant.Server.Internal.ServerError
   ) where
@@ -172,7 +172,7 @@ instance (HasServer a context, HasServer b context) => HasServer (a :<|> b) cont
 -- >         getBook isbn = ...
 instance (KnownSymbol capture, FromHttpApiData a
          , HasServer api context, SBoolI (FoldLenient mods)
-         , HasContextEntry context ErrorFormatters
+         , HasContextEntry (MkContextWithErrorFormatter context) ErrorFormatters
          )
       => HasServer (Capture' mods capture a :> api) context where
 
@@ -190,11 +190,10 @@ instance (KnownSymbol capture, FromHttpApiData a
                      , parseUrlPiece txt :: Either T.Text a) of
                   (SFalse, Left e) -> delayedFail $ formatError rep request $ cs e
                   (SFalse, Right v) -> return v
-                  (STrue, piece) -> return $ (either (Left . cs) Right) piece
-              )
+                  (STrue, piece) -> return $ (either (Left . cs) Right) piece)
     where
       rep = typeRep (Proxy :: Proxy Capture')
-      formatError = urlParseErrorFormatter $ getContextEntry context
+      formatError = urlParseErrorFormatter $ getContextEntry (mkContextWithErrorFormatter context)
 
 -- | If you use 'CaptureAll' in one of the endpoints for your API,
 -- this automatically requires your server-side handler to be a
@@ -215,7 +214,7 @@ instance (KnownSymbol capture, FromHttpApiData a
 -- >         getSourceFile pathSegments = ...
 instance (KnownSymbol capture, FromHttpApiData a
          , HasServer api context
-         , HasContextEntry context ErrorFormatters
+         , HasContextEntry (MkContextWithErrorFormatter context) ErrorFormatters
          )
       => HasServer (CaptureAll capture a :> api) context where
 
@@ -235,7 +234,7 @@ instance (KnownSymbol capture, FromHttpApiData a
               )
     where
       rep = typeRep (Proxy :: Proxy CaptureAll)
-      formatError = urlParseErrorFormatter $ getContextEntry context
+      formatError = urlParseErrorFormatter $ getContextEntry (mkContextWithErrorFormatter context)
 
 allowedMethodHead :: Method -> Request -> Bool
 allowedMethodHead method request = method == methodGet && requestMethod request == methodHead
@@ -403,7 +402,7 @@ streamRouter splitHeaders method status framingproxy ctypeproxy action = leafRou
 instance
   (KnownSymbol sym, FromHttpApiData a, HasServer api context
   , SBoolI (FoldRequired mods), SBoolI (FoldLenient mods)
-  , HasContextEntry context ErrorFormatters
+  , HasContextEntry (MkContextWithErrorFormatter context) ErrorFormatters
   )
   => HasServer (Header' mods sym a :> api) context where
 ------
@@ -416,7 +415,7 @@ instance
       subserver `addHeaderCheck` withRequest headerCheck
     where
       rep = typeRep (Proxy :: Proxy Header')
-      formatError = headerParseErrorFormatter $ getContextEntry context
+      formatError = headerParseErrorFormatter $ getContextEntry (mkContextWithErrorFormatter context)
 
       headerName :: IsString n => n
       headerName = fromString $ symbolVal (Proxy :: Proxy sym)
@@ -460,7 +459,7 @@ instance
 instance
   ( KnownSymbol sym, FromHttpApiData a, HasServer api context
   , SBoolI (FoldRequired mods), SBoolI (FoldLenient mods)
-  , HasContextEntry context ErrorFormatters
+  , HasContextEntry (MkContextWithErrorFormatter context) ErrorFormatters
   )
   => HasServer (QueryParam' mods sym a :> api) context where
 ------
@@ -474,7 +473,7 @@ instance
         paramname = cs $ symbolVal (Proxy :: Proxy sym)
 
         rep = typeRep (Proxy :: Proxy QueryParam')
-        formatError = urlParseErrorFormatter $ getContextEntry context
+        formatError = urlParseErrorFormatter $ getContextEntry (mkContextWithErrorFormatter context)
 
         parseParam :: Request -> DelayedIO (RequestArgument mods a)
         parseParam req =
@@ -515,7 +514,7 @@ instance
 -- >   where getBooksBy :: [Text] -> Handler [Book]
 -- >         getBooksBy authors = ...return all books by these authors...
 instance (KnownSymbol sym, FromHttpApiData a, HasServer api context
-         , HasContextEntry context ErrorFormatters)
+         , HasContextEntry (MkContextWithErrorFormatter context) ErrorFormatters)
       => HasServer (QueryParams sym a :> api) context where
 
   type ServerT (QueryParams sym a :> api) m =
@@ -527,7 +526,7 @@ instance (KnownSymbol sym, FromHttpApiData a, HasServer api context
       subserver `addParameterCheck` withRequest paramsCheck
     where
       rep = typeRep (Proxy :: Proxy QueryParams)
-      formatError = urlParseErrorFormatter $ getContextEntry context
+      formatError = urlParseErrorFormatter $ getContextEntry (mkContextWithErrorFormatter context)
 
       paramname = cs $ symbolVal (Proxy :: Proxy sym)
       paramsCheck req =
@@ -626,7 +625,7 @@ instance HasServer Raw context where
 -- >   where postBook :: Book -> Handler Book
 -- >         postBook book = ...insert into your db...
 instance ( AllCTUnrender list a, HasServer api context, SBoolI (FoldLenient mods)
-         , HasContextEntry context ErrorFormatters
+         , HasContextEntry (MkContextWithErrorFormatter context) ErrorFormatters
          ) => HasServer (ReqBody' mods list a :> api) context where
 
   type ServerT (ReqBody' mods list a :> api) m =
@@ -639,7 +638,7 @@ instance ( AllCTUnrender list a, HasServer api context, SBoolI (FoldLenient mods
           addBodyCheck subserver ctCheck bodyCheck
     where
       rep = typeRep (Proxy :: Proxy ReqBody')
-      formatError = bodyParserErrorFormatter $ getContextEntry context
+      formatError = bodyParserErrorFormatter $ getContextEntry (mkContextWithErrorFormatter context)
 
       -- Content-Type check, we only lookup we can try to parse the request body
       ctCheck = withRequest $ \ request -> do

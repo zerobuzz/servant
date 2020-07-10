@@ -34,7 +34,7 @@ type AsServer = AsServerT Handler
 -- | Transform a record of routes into a WAI 'Application'.
 genericServe
     :: forall routes.
-       ( HasServer (ToServantApi routes) DefaultErrorFormatters
+       ( HasServer (ToServantApi routes) '[]
        , GenericServant routes AsServer
        , Server (ToServantApi routes) ~ ToServant routes AsServer
        )
@@ -48,7 +48,7 @@ genericServeT
   :: forall (routes :: * -> *) (m :: * -> *).
      ( GenericServant routes (AsServerT m)
      , GenericServant routes AsApi
-     , HasServer (ToServantApi routes) DefaultErrorFormatters
+     , HasServer (ToServantApi routes) '[]
      , ServerT (ToServantApi routes) m ~ ToServant routes (AsServerT m)
      )
   => (forall a. m a -> Handler a) -- ^ 'hoistServer' argument to come back to 'Handler'
@@ -66,7 +66,7 @@ genericServeTWithContext
   :: forall (routes :: * -> *) (m :: * -> *) (ctx :: [*]).
      ( GenericServant routes (AsServerT m)
      , GenericServant routes AsApi
-     , HasServer (ToServantApi routes) (ctx .++ DefaultErrorFormatters)
+     , HasServer (ToServantApi routes) ctx
      , HasContextEntry (ctx .++ DefaultErrorFormatters) ErrorFormatters
      , ServerT (ToServantApi routes) m ~ ToServant routes (AsServerT m)
      )
@@ -79,7 +79,7 @@ genericServeTWithContext f server ctx =
   hoistServerWithContext p pctx f (genericServerT server)
   where
     p = genericApi (Proxy :: Proxy routes)
-    pctx = Proxy :: Proxy (ctx .++ DefaultErrorFormatters)
+    pctx = Proxy :: Proxy ctx
 
 -- | Transform a record of endpoints into a 'Server'.
 genericServer
